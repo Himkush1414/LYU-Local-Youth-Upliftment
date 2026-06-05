@@ -1,213 +1,354 @@
-'use client'
+'use client';
 
-import Link from 'next/link'
-import { ArrowRight, User, Briefcase, MapPin, Star, Shield, Zap } from 'lucide-react'
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
 
 export default function RegisterPage() {
+  const router = useRouter();
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const supabase = createClient();
+
+  const handleGoogleRegister = async () => {
+    setGoogleLoading(true);
+    setError('');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${location.origin}/auth/callback` },
+    });
+    if (error) {
+      setError(error.message);
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName },
+      },
+    });
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+    } else {
+      router.replace('/auth/onboarding');
+    }
+  };
+
+  const passwordStrength = (() => {
+    if (!password) return 0;
+    let s = 0;
+    if (password.length >= 8) s++;
+    if (/[A-Z]/.test(password)) s++;
+    if (/[0-9]/.test(password)) s++;
+    if (/[^A-Za-z0-9]/.test(password)) s++;
+    return s;
+  })();
+
+  const strengthColor = ['#ef4444', '#f97316', '#eab308', '#22c55e'][passwordStrength - 1] || 'rgba(255,255,255,0.1)';
+  const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong'][passwordStrength];
+
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'DM Sans', sans-serif; }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes floatOrb {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-20px); }
+        }
+        .auth-input {
+          width: 100%;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 12px;
+          padding: 14px 16px;
+          color: #e8e8f0;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 15px;
+          outline: none;
+          transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+        }
+        .auth-input:focus {
+          border-color: #4f46e5;
+          background: rgba(79,70,229,0.06);
+          box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+        }
+        .auth-input::placeholder { color: rgba(232,232,240,0.3); }
+        .btn-primary {
+          width: 100%;
+          background: linear-gradient(135deg, #4f46e5, #6d28d9);
+          color: #fff;
+          border: none;
+          border-radius: 12px;
+          padding: 14px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 15px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+          letter-spacing: 0.01em;
+        }
+        .btn-primary:hover:not(:disabled) {
+          opacity: 0.92;
+          transform: translateY(-1px);
+          box-shadow: 0 8px 32px rgba(79,70,229,0.4);
+        }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-google {
+          width: 100%;
+          background: rgba(255,255,255,0.05);
+          color: #e8e8f0;
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 12px;
+          padding: 13px;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 15px;
+          font-weight: 500;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          transition: background 0.2s, border-color 0.2s;
+        }
+        .btn-google:hover:not(:disabled) {
+          background: rgba(255,255,255,0.08);
+          border-color: rgba(255,255,255,0.2);
+        }
+        .btn-google:disabled { opacity: 0.5; cursor: not-allowed; }
+        .divider {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          color: rgba(232,232,240,0.25);
+          font-size: 13px;
+        }
+        .divider::before, .divider::after {
+          content: '';
+          flex: 1;
+          height: 1px;
+          background: rgba(255,255,255,0.08);
+        }
+      `}</style>
 
-      {/* LEFT PANEL */}
       <div style={{
-        width: '45%', flexDirection: 'column', justifyContent: 'space-between',
-        padding: '48px 56px', position: 'relative', overflow: 'hidden',
-        background: 'linear-gradient(145deg,#1e3a8a 0%,#1d4ed8 45%,#2563eb 75%,#4f46e5 100%)',
-      }} className="register-left">
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-          <div style={{ position: 'absolute', top: -80, left: -80, width: 320, height: 320, background: 'rgba(255,255,255,0.05)', borderRadius: '50%', filter: 'blur(60px)' }} />
-          <div style={{ position: 'absolute', bottom: 60, right: 20, width: 240, height: 240, background: 'rgba(99,102,241,0.2)', borderRadius: '50%', filter: 'blur(50px)' }} />
-        </div>
+        minHeight: '100vh',
+        background: '#0a0a0f',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          position: 'absolute', bottom: '-10%', left: '-5%', width: 600, height: 600,
+          background: 'radial-gradient(circle, rgba(79,70,229,0.1) 0%, transparent 65%)',
+          animation: 'floatOrb 12s ease-in-out infinite', pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', top: '-10%', right: '-5%', width: 450, height: 450,
+          background: 'radial-gradient(circle, rgba(124,58,237,0.08) 0%, transparent 65%)',
+          animation: 'floatOrb 9s ease-in-out infinite reverse', pointerEvents: 'none',
+        }} />
 
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', position: 'relative' }}>
-          <div style={{ width: 38, height: 38, borderRadius: 11, background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: 'white', fontWeight: 900, fontSize: 12 }}>LY</span>
+        <div style={{
+          width: '100%',
+          maxWidth: 440,
+          animation: 'fadeUp 0.7s cubic-bezier(0.16,1,0.3,1) both',
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          {/* Logo */}
+          <div style={{ textAlign: 'center', marginBottom: 40 }}>
+            <Link href="/" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 40,
+                height: 40,
+                background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                borderRadius: 12,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, color: '#fff',
+              }}>L</div>
+              <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 22, color: '#fff', letterSpacing: '-0.02em' }}>LYU</span>
+            </Link>
           </div>
-          <span style={{ color: 'white', fontWeight: 900, fontSize: 20 }}>LYU</span>
-        </Link>
 
-        <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 28 }}>
-          <div>
-            <h1 style={{ fontSize: 'clamp(1.8rem,2.5vw,2.4rem)', fontWeight: 900, color: 'white', lineHeight: 1.1, marginBottom: 14, letterSpacing: '-0.02em' }}>
-              Your next job is<br />
-              <span style={{ color: '#93c5fd' }}>closer than you think</span>
-            </h1>
-            <p style={{ color: '#bfdbfe', fontSize: 15, lineHeight: 1.7 }}>
-              LYU connects local youth with verified employers in your city. AI matches your skills to the right job — fast.
+          {/* Card */}
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 24,
+            padding: '40px',
+            backdropFilter: 'blur(20px)',
+          }}>
+            <h1 style={{
+              fontFamily: 'Syne, sans-serif',
+              fontWeight: 700,
+              fontSize: 26,
+              color: '#fff',
+              letterSpacing: '-0.02em',
+              marginBottom: 6,
+            }}>Create your account</h1>
+            <p style={{ fontSize: 15, color: 'rgba(232,232,240,0.45)', marginBottom: 32 }}>
+              Start your career journey today — it's free
             </p>
-          </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {[
-              { icon: MapPin, text: 'Jobs in your city, district & state' },
-              { icon: Zap, text: 'AI skill matching — see your fit score' },
-              { icon: Shield, text: 'Verified employers only — zero fake jobs' },
-              { icon: Star, text: 'Free forever for job seekers' },
-            ].map(item => (
-              <div key={item.text} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.15)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <item.icon style={{ width: 15, height: 15, color: 'white' }} />
+            {/* Google */}
+            <button className="btn-google" onClick={handleGoogleRegister} disabled={googleLoading || loading}>
+              {googleLoading ? (
+                <div style={{ width: 18, height: 18, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+              )}
+              Continue with Google
+            </button>
+
+            <div className="divider" style={{ margin: '24px 0' }}>or register with email</div>
+
+            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'rgba(232,232,240,0.6)', marginBottom: 8 }}>
+                  Full name
+                </label>
+                <input
+                  className="auth-input"
+                  type="text"
+                  placeholder="Rahul Sharma"
+                  value={fullName}
+                  onChange={e => setFullName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'rgba(232,232,240,0.6)', marginBottom: 8 }}>
+                  Email address
+                </label>
+                <input
+                  className="auth-input"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'rgba(232,232,240,0.6)', marginBottom: 8 }}>
+                  Password
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    className="auth-input"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Min. 8 characters"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    style={{ paddingRight: 48 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'rgba(232,232,240,0.35)', padding: 0, lineHeight: 1,
+                    }}
+                  >
+                    {showPassword ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    )}
+                  </button>
                 </div>
-                <span style={{ color: '#e0e7ff', fontSize: 14, fontWeight: 500 }}>{item.text}</span>
+
+                {/* Password strength */}
+                {password && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                      {[1, 2, 3, 4].map(i => (
+                        <div key={i} style={{
+                          flex: 1, height: 3, borderRadius: 2,
+                          background: i <= passwordStrength ? strengthColor : 'rgba(255,255,255,0.08)',
+                          transition: 'background 0.3s',
+                        }} />
+                      ))}
+                    </div>
+                    <span style={{ fontSize: 12, color: strengthColor }}>{strengthLabel}</span>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
 
-          <div style={{ background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', borderRadius: 16, padding: '18px 20px', border: '1px solid rgba(255,255,255,0.18)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <div style={{ display: 'flex' }}>
-                {['PS','RV','AN'].map(init => (
-                  <div key={init} style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: '2px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: -8, fontSize: 9, fontWeight: 900, color: 'white' }}>{init}</div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 2 }}>
-                {[1,2,3,4,5].map(i => (
-                  <svg key={i} style={{ width: 12, height: 12, fill: '#fbbf24' }} viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                  </svg>
-                ))}
-              </div>
-            </div>
-            <p style={{ color: 'white', fontSize: 13, fontWeight: 600, lineHeight: 1.5 }}>"Found a job 4km from home in 3 days"</p>
-            <p style={{ color: '#93c5fd', fontSize: 11, marginTop: 4 }}>Priya S. — placed at TechCorp, Chandigarh</p>
-          </div>
-        </div>
-
-        <p style={{ color: '#93c5fd', fontSize: 12, position: 'relative' }}>© 2026 LYU · Local Youth Upliftment</p>
-      </div>
-
-      {/* RIGHT PANEL */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', background: '#f8fafc', overflowY: 'auto' }}>
-        <div style={{ width: '100%', maxWidth: 420 }}>
-
-          {/* Mobile logo */}
-          <div style={{ marginBottom: 36 }} className="register-mobile-logo">
-            <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#2563eb,#4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 16px rgba(37,99,235,0.3)' }}>
-                <span style={{ color: 'white', fontWeight: 900, fontSize: 12 }}>LY</span>
-              </div>
-              <span style={{ fontWeight: 900, fontSize: 20, color: '#0f172a' }}>LYU</span>
-            </Link>
-          </div>
-
-          <div style={{ marginBottom: 32 }}>
-            <h2 style={{ fontSize: 28, fontWeight: 900, color: '#0f172a', marginBottom: 6, letterSpacing: '-0.02em' }}>Join LYU</h2>
-            <p style={{ color: '#64748b', fontSize: 15 }}>What best describes you?</p>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 28 }}>
-
-            {/* Job Seeker card */}
-            <Link href="/auth/register/seeker" style={{ textDecoration: 'none' }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 16,
-                background: 'white', border: '2px solid #e2e8f0',
-                borderRadius: 18, padding: '18px 20px',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-                cursor: 'pointer', transition: 'all 0.2s',
-              }}
-                onMouseEnter={e => {
-                  const el = e.currentTarget
-                  el.style.borderColor = '#2563eb'
-                  el.style.background = '#eff6ff'
-                  el.style.boxShadow = '0 8px 24px rgba(37,99,235,0.12)'
-                  el.style.transform = 'translateY(-2px)'
-                }}
-                onMouseLeave={e => {
-                  const el = e.currentTarget
-                  el.style.borderColor = '#e2e8f0'
-                  el.style.background = 'white'
-                  el.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)'
-                  el.style.transform = 'translateY(0)'
+              {error && (
+                <div style={{
+                  background: 'rgba(239,68,68,0.1)',
+                  border: '1px solid rgba(239,68,68,0.2)',
+                  borderRadius: 10,
+                  padding: '12px 14px',
+                  fontSize: 13.5,
+                  color: '#fca5a5',
                 }}>
-                <div style={{ width: 52, height: 52, background: '#eff6ff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid #dbeafe' }}>
-                  <User style={{ width: 24, height: 24, color: '#2563eb' }} />
+                  {error}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontWeight: 900, color: '#0f172a', fontSize: 16, marginBottom: 3 }}>I am looking for a job</p>
-                  <p style={{ color: '#64748b', fontSize: 13, marginBottom: 6 }}>Find local jobs, get AI matched, apply in one click</p>
-                  <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, color: '#15803d', background: '#f0fdf4', padding: '3px 10px', borderRadius: 9999, border: '1px solid #bbf7d0' }}>Free forever</span>
-                </div>
-                <ArrowRight style={{ width: 18, height: 18, color: '#cbd5e1', flexShrink: 0 }} />
-              </div>
-            </Link>
+              )}
 
-            {/* Employer card */}
-            <Link href="/auth/register/employer" style={{ textDecoration: 'none' }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 16,
-                background: 'white', border: '2px solid #e2e8f0',
-                borderRadius: 18, padding: '18px 20px',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-                cursor: 'pointer', transition: 'all 0.2s',
-              }}
-                onMouseEnter={e => {
-                  const el = e.currentTarget
-                  el.style.borderColor = '#7c3aed'
-                  el.style.background = '#faf5ff'
-                  el.style.boxShadow = '0 8px 24px rgba(124,58,237,0.12)'
-                  el.style.transform = 'translateY(-2px)'
-                }}
-                onMouseLeave={e => {
-                  const el = e.currentTarget
-                  el.style.borderColor = '#e2e8f0'
-                  el.style.background = 'white'
-                  el.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)'
-                  el.style.transform = 'translateY(0)'
-                }}>
-                <div style={{ width: 52, height: 52, background: '#faf5ff', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid #ede9fe' }}>
-                  <Briefcase style={{ width: 24, height: 24, color: '#7c3aed' }} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontWeight: 900, color: '#0f172a', fontSize: 16, marginBottom: 3 }}>I am hiring talent</p>
-                  <p style={{ color: '#64748b', fontSize: 13, marginBottom: 6 }}>Post jobs, find verified local candidates, hire faster</p>
-                  <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, color: '#6d28d9', background: '#f5f3ff', padding: '3px 10px', borderRadius: 9999, border: '1px solid #ddd6fe' }}>For employers</span>
-                </div>
-                <ArrowRight style={{ width: 18, height: 18, color: '#cbd5e1', flexShrink: 0 }} />
-              </div>
-            </Link>
+              <button className="btn-primary" type="submit" disabled={loading || googleLoading} style={{ marginTop: 4 }}>
+                {loading ? (
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <div style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                    Creating account...
+                  </span>
+                ) : 'Create account'}
+              </button>
+
+              <p style={{ fontSize: 12, color: 'rgba(232,232,240,0.3)', textAlign: 'center', lineHeight: 1.6 }}>
+                By signing up, you agree to our{' '}
+                <a href="#" style={{ color: '#6366f1', textDecoration: 'none' }}>Terms</a>
+                {' '}and{' '}
+                <a href="#" style={{ color: '#6366f1', textDecoration: 'none' }}>Privacy Policy</a>
+              </p>
+            </form>
           </div>
 
-          {/* Divider */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-            <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
-            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>or</span>
-            <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
-          </div>
-
-          {/* Google */}
-          <button style={{
-            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-            padding: '13px 20px', borderRadius: 13, border: '2px solid #e2e8f0',
-            background: 'white', color: '#374151', fontWeight: 600, fontSize: 14,
-            cursor: 'pointer', fontFamily: 'inherit', marginBottom: 20,
-            boxShadow: '0 1px 4px rgba(0,0,0,0.04)', transition: 'all 0.15s',
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#f8fafc' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = 'white' }}>
-            <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, flexShrink: 0 }}>
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Continue with Google
-          </button>
-
-          <p style={{ textAlign: 'center', fontSize: 13, color: '#64748b' }}>
+          <p style={{ textAlign: 'center', marginTop: 24, fontSize: 14, color: 'rgba(232,232,240,0.4)' }}>
             Already have an account?{' '}
-            <Link href="/auth/login" style={{ color: '#2563eb', fontWeight: 700, textDecoration: 'none' }}>Sign in</Link>
+            <Link href="/auth/login" style={{ color: '#818cf8', textDecoration: 'none', fontWeight: 500 }}>
+              Sign in
+            </Link>
           </p>
         </div>
       </div>
-
-      <style>{`
-        .register-left { display: none; }
-        .register-mobile-logo { display: block; }
-        @media (min-width: 900px) {
-          .register-left { display: flex !important; }
-          .register-mobile-logo { display: none !important; }
-        }
-      `}</style>
-    </div>
-  )
+    </>
+  );
 }
