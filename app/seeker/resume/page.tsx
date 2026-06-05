@@ -1,851 +1,1679 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { toast } from 'sonner'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Download, FileText, Loader2, ChevronRight, Sparkles,
-  RefreshCw, ChevronDown, Edit3, ArrowLeft
+  Send, Download, Sparkles, User, Bot, ChevronRight,
+  Briefcase, GraduationCap, Code2, Award, FolderGit2,
+  MapPin, Mail, Phone, Globe, Github, Linkedin,
+  RefreshCw, Palette, FileText, X, Check, Loader2,
+  Star, Zap, Layout, Feather, Crown, Layers
 } from 'lucide-react'
 
-// ─── TYPES ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-interface ExperienceItem {
-  id: string; company: string; role: string; duration: string
-  location: string; bullets: string[]
-}
-interface EducationItem {
-  id: string; institution: string; degree: string; field: string; year: string; cgpa: string
-}
-interface SkillGroup { id: string; category: string; items: string[] }
-interface ProjectItem {
-  id: string; name: string; tech: string; description: string; link: string; bullets: string[]
-}
 interface ResumeData {
-  name: string; title: string; email: string; phone: string; location: string
-  linkedin: string; github: string; website: string; summary: string
-  experience: ExperienceItem[]; education: EducationItem[]
-  skills: SkillGroup[]; projects: ProjectItem[]
-  certifications: string[]; languages: { language: string; level: string }[]
-  documentType: 'resume' | 'cv'; targetRole: string; targetIndustry: string
+  name: string
+  email: string
+  phone: string
+  location: string
+  linkedin: string
+  github: string
+  portfolio: string
+  headline: string
+  summary: string
+  experience: {
+    company: string
+    role: string
+    duration: string
+    location: string
+    bullets: string[]
+  }[]
+  education: {
+    degree: string
+    institution: string
+    year: string
+    score: string
+  }[]
+  skills: {
+    technical: string[]
+    tools: string[]
+    soft: string[]
+    languages: string[]
+  }
+  projects: {
+    name: string
+    tech: string
+    description: string
+    url: string
+    impact: string
+  }[]
+  certifications: {
+    name: string
+    issuer: string
+    year: string
+    url: string
+  }[]
+  achievements: string[]
 }
-interface Message { role: 'user' | 'ai'; text: string; timestamp: number }
 
-// ─── TEMPLATES ───────────────────────────────────────────────────────────────
+interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  ts: number
+}
 
-const TEMPLATES = [
-  { id: 'executive', name: 'Executive', description: 'Senior & leadership roles', accent: '#0f2942', secondary: '#c9a84c', font: 'Georgia, "Times New Roman", serif', layout: 'single', preview: 'linear-gradient(135deg,#0f2942 0%,#1a4268 100%)' },
-  { id: 'modern',   name: 'Modern',    description: 'Tech & design roles',       accent: '#1565c0', secondary: '#42a5f5', font: '"Helvetica Neue", Arial, sans-serif', layout: 'sidebar', preview: 'linear-gradient(135deg,#1565c0 0%,#1976d2 100%)' },
-  { id: 'minimal',  name: 'Minimal',   description: 'Academic & research',        accent: '#1a1a1a', secondary: '#555',    font: '"Times New Roman", Georgia, serif', layout: 'single', preview: 'linear-gradient(135deg,#1a1a1a 0%,#444 100%)' },
-  { id: 'creative', name: 'Creative',  description: 'Design & marketing',         accent: '#5b21b6', secondary: '#a78bfa', font: '"Arial", sans-serif', layout: 'accent-bar', preview: 'linear-gradient(135deg,#5b21b6 0%,#7c3aed 100%)' },
-  { id: 'tech',     name: 'Tech',      description: 'Engineering & data',         accent: '#065f46', secondary: '#34d399', font: '"Courier New", monospace', layout: 'tech-header', preview: 'linear-gradient(135deg,#065f46 0%,#047857 100%)' },
-  { id: 'finance',  name: 'Finance',   description: 'Banking, law & consulting',  accent: '#1c3a1e', secondary: '#4caf50', font: 'Garamond, Georgia, serif', layout: 'single', preview: 'linear-gradient(135deg,#1c3a1e 0%,#2e5731 100%)' },
+type TemplateId = 'classic' | 'modern' | 'minimal' | 'executive' | 'creative'
+type ThemeColor = 'indigo' | 'emerald' | 'rose' | 'amber' | 'slate'
+
+interface Theme {
+  id: ThemeColor
+  label: string
+  primary: string
+  accent: string
+  bg: string
+  sidebar: string
+  text: string
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const THEMES: Theme[] = [
+  { id: 'indigo', label: 'Navy', primary: '#1e3a5f', accent: '#3b82f6', bg: '#f0f4ff', sidebar: '#1e3a5f', text: '#1e293b' },
+  { id: 'emerald', label: 'Forest', primary: '#064e3b', accent: '#10b981', bg: '#ecfdf5', sidebar: '#064e3b', text: '#1e293b' },
+  { id: 'rose', label: 'Rose', primary: '#881337', accent: '#f43f5e', bg: '#fff1f2', sidebar: '#881337', text: '#1e293b' },
+  { id: 'amber', label: 'Gold', primary: '#78350f', accent: '#f59e0b', bg: '#fffbeb', sidebar: '#78350f', text: '#1e293b' },
+  { id: 'slate', label: 'Onyx', primary: '#0f172a', accent: '#64748b', bg: '#f8fafc', sidebar: '#0f172a', text: '#1e293b' },
 ]
 
-const emptyResume = (): ResumeData => ({
-  name: '', title: '', email: '', phone: '', location: '', linkedin: '', github: '', website: '', summary: '',
-  experience: [], education: [], skills: [], projects: [], certifications: [], languages: [],
-  documentType: 'resume', targetRole: '', targetIndustry: ''
-})
+const TEMPLATES = [
+  { id: 'classic' as TemplateId, label: 'Classic', icon: FileText, desc: 'MNC & IT pros' },
+  { id: 'modern' as TemplateId, label: 'Modern', icon: Layers, desc: 'Product & startups' },
+  { id: 'minimal' as TemplateId, label: 'Minimal', icon: Feather, desc: 'Finance & consulting' },
+  { id: 'executive' as TemplateId, label: 'Executive', icon: Crown, desc: 'Senior & MBA' },
+  { id: 'creative' as TemplateId, label: 'Creative', icon: Zap, desc: 'Design & frontend' },
+]
 
-// ─── AI ENGINE ───────────────────────────────────────────────────────────────
-
-async function callAI(userMessage: string, history: Message[], collected: Partial<ResumeData>): Promise<{
-  reply: string; collectedUpdate: Partial<ResumeData>; readyToGenerate: boolean; resumeData?: ResumeData
-}> {
-  const systemPrompt = `You are Aria, an elite professional resume writer and ATS expert at a top career consulting firm.
-
-YOUR PERSONALITY: Warm, sharp, confident. You ask smart questions and give professional advice.
-
-CONVERSATION RULES — CRITICAL:
-1. Ask ONLY ONE question per message. Never two. Never three.
-2. Keep questions under 20 words.
-3. If the user says anything like "skip", "you choose", "fill it yourself", "auto-fill", "random", "decide for yourself", "generate based on role", "use your judgment" — IMMEDIATELY generate the full resume using intelligent defaults based on what you know. DO NOT ask more questions. Set readyToGenerate: true.
-4. If user says "build", "create", "generate", "done", "make it", "go ahead", "ready" — same thing: generate immediately.
-5. Never repeat a question you already asked.
-6. Acknowledge what the user shared before asking the next thing.
-
-WHAT TO COLLECT (in order, one question at a time):
-- Full name
-- Target job title / role
-- Current/past job experience (company, role, achievements)
-- Education (degree, institution)
-- Skills (technical and soft)
-- Projects (if any)
-- Contact info (email, phone, location, LinkedIn)
-
-WHEN GENERATING — make it EXCEPTIONAL:
-- Write a powerful 3-sentence professional summary with impact and keywords
-- Turn every bullet into an achievement with metrics (%, numbers, scale)
-- Group skills intelligently: Languages, Frameworks, Tools, Cloud, Databases, etc.
-- Make it ATS-optimized with industry keywords
-- If user skipped sections, fill them with REALISTIC, PLAUSIBLE examples for their role
-- Make experience bullets extremely specific: "Engineered real-time data pipeline processing 2M+ events/day using Apache Kafka and Spark, reducing latency by 68%"
-
-COLLECTED SO FAR: ${JSON.stringify(collected)}
-RECENT HISTORY: ${history.slice(-8).map(m => `${m.role}: ${m.text}`).join('\n')}
-
-RESPOND IN VALID JSON ONLY (no markdown, no code fences):
-{
-  "reply": "your message to the user",
-  "collectedUpdate": { ...any new fields extracted from user message },
-  "readyToGenerate": false,
-  "resumeData": null
+const EMPTY_RESUME: ResumeData = {
+  name: '', email: '', phone: '', location: '', linkedin: '', github: '',
+  portfolio: '', headline: '', summary: '',
+  experience: [], education: [], skills: { technical: [], tools: [], soft: [], languages: [] },
+  projects: [], certifications: [], achievements: []
 }
 
-When readyToGenerate is true, include full resumeData:
-{
-  "reply": "Your resume is ready! ✨ Here's your professional [role] resume.",
-  "collectedUpdate": {},
-  "readyToGenerate": true,
-  "resumeData": {
-    "name": "Full Name",
-    "title": "Job Title",
-    "email": "email@example.com",
-    "phone": "+91 98765 43210",
-    "location": "City, State",
-    "linkedin": "linkedin.com/in/username",
-    "github": "github.com/username",
-    "website": "",
-    "summary": "Results-driven [title] with X+ years of experience building [specific things]. Proven track record of [achievement]. Passionate about [relevant area] with expertise in [key technologies].",
-    "experience": [
-      {
-        "id": "exp-1",
-        "company": "Company Name",
-        "role": "Job Title",
-        "duration": "Jan 2022 – Present",
-        "location": "City, India",
-        "bullets": [
-          "Engineered [specific thing] resulting in [X]% improvement in [metric]",
-          "Led team of [N] engineers to deliver [project] [N] weeks ahead of schedule",
-          "Architected [system] serving [N]M+ users with 99.9% uptime"
-        ]
-      }
-    ],
-    "education": [
-      { "id": "edu-1", "institution": "University Name", "degree": "B.Tech / B.E.", "field": "Computer Science", "year": "2022", "cgpa": "8.6/10" }
-    ],
-    "skills": [
-      { "id": "sk-1", "category": "Programming Languages", "items": ["JavaScript", "TypeScript", "Python"] },
-      { "id": "sk-2", "category": "Frameworks & Libraries", "items": ["React", "Node.js", "Express", "Next.js"] },
-      { "id": "sk-3", "category": "Databases", "items": ["PostgreSQL", "MongoDB", "Redis"] },
-      { "id": "sk-4", "category": "Cloud & DevOps", "items": ["AWS", "Docker", "Kubernetes", "CI/CD"] },
-      { "id": "sk-5", "category": "Tools", "items": ["Git", "Jira", "Figma", "Postman"] }
-    ],
-    "projects": [
-      {
-        "id": "pr-1",
-        "name": "Project Name",
-        "tech": "Next.js · Node.js · PostgreSQL · AWS",
-        "description": "Full-stack platform with [specific features]",
-        "link": "github.com/username/project",
-        "bullets": [
-          "Built [feature] reducing [metric] by [X]%",
-          "Implemented [technical thing] to handle [scale]"
-        ]
-      }
-    ],
-    "certifications": ["AWS Certified Solutions Architect", "Google Cloud Professional"],
-    "languages": [{"language": "English", "level": "Professional"}, {"language": "Hindi", "level": "Native"}],
-    "documentType": "resume",
-    "targetRole": "Software Engineer",
-    "targetIndustry": "Technology"
-  }
-}`
+const QUESTION_FLOW = [
+  'greet',
+  'name', 'role', 'experience', 'education',
+  'skills', 'work', 'projects', 'location', 'contact',
+  'confirm', 'done'
+] as const
 
-  try {
-    const res = await fetch('/api/v1/ai/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [
-          ...history.slice(-8).map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.text })),
-          { role: 'user', content: userMessage }
-        ],
-        systemOverride: systemPrompt,
-      }),
+type FlowStep = typeof QUESTION_FLOW[number]
+
+// ─── AI helpers ───────────────────────────────────────────────────────────────
+
+async function callAI(prompt: string, systemOverride?: string): Promise<string> {
+  const res = await fetch('/api/v1/ai/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: prompt }],
+      systemOverride: systemOverride ?? 'You are a warm, concise career coach for Indian professionals. Reply in 1-2 sentences max. Be encouraging.'
     })
-    const data = await res.json()
-    let raw = (data.reply || '').trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
-    // Handle case where AI wraps in object with extra keys
-    const parsed = JSON.parse(raw)
-    return {
-      reply: parsed.reply || "Tell me more about your background!",
-      collectedUpdate: parsed.collectedUpdate || {},
-      readyToGenerate: !!parsed.readyToGenerate,
-      resumeData: parsed.resumeData || undefined
-    }
-  } catch {
-    return { reply: "Let's keep going! What's your name and the role you're targeting?", collectedUpdate: {}, readyToGenerate: false }
-  }
+  })
+  if (!res.ok) throw new Error('AI call failed')
+  const data = await res.json()
+  return data.reply as string
 }
 
-// ─── PDF HTML GENERATOR ───────────────────────────────────────────────────────
+async function buildResumeJSON(userInfo: Record<string, string>): Promise<ResumeData> {
+  const infoText = Object.entries(userInfo)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n')
 
-function buildPDFHTML(data: ResumeData, template: typeof TEMPLATES[0]): string {
-  const { accent, secondary, font } = template
-  const isSidebar = template.layout === 'sidebar'
-  const isTechHeader = template.layout === 'tech-header'
-  const isAccentBar = template.layout === 'accent-bar'
+  const prompt = `Build a complete, ATS-optimized resume for the Indian job market.
 
-  const contacts = [
-    data.email && `<span>✉&nbsp;${data.email}</span>`,
-    data.phone && `<span>📱&nbsp;${data.phone}</span>`,
-    data.location && `<span>📍&nbsp;${data.location}</span>`,
-    data.linkedin && `<span>🔗&nbsp;${data.linkedin}</span>`,
-    data.github && `<span>⌨&nbsp;${data.github}</span>`,
-    data.website && `<span>🌐&nbsp;${data.website}</span>`,
-  ].filter(Boolean).join('')
+Candidate info:
+${infoText}
 
-  const expHTML = data.experience.map(e => `
-  <div class="item">
-    <div class="item-head">
-      <div><span class="item-title">${e.role}</span><span class="item-sub"> — ${e.company}${e.location ? ` · ${e.location}` : ''}</span></div>
-      <span class="item-date">${e.duration}</span>
-    </div>
-    <ul>${e.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
-  </div>`).join('')
-
-  const eduHTML = data.education.map(e => `
-  <div class="edu-row">
-    <div><div class="item-title">${e.degree}${e.field ? ` in ${e.field}` : ''}</div><div class="item-sub">${e.institution}</div></div>
-    <div style="text-align:right"><div class="item-date">${e.year}</div>${e.cgpa ? `<div style="font-size:8.5pt;font-weight:700;color:${accent}">${e.cgpa}</div>` : ''}</div>
-  </div>`).join('')
-
-  const skillsHTML = data.skills.map(s => `
-  <div class="skill-row"><span class="skill-cat">${s.category}:</span><span class="skill-val">${s.items.join(', ')}</span></div>`).join('')
-
-  const projHTML = data.projects.map(p => `
-  <div class="item">
-    <div class="item-head">
-      <div><span class="item-title">${p.name}</span><span class="item-sub"> · ${p.tech}</span></div>
-      ${p.link ? `<span style="font-size:8pt;color:${accent}">${p.link}</span>` : ''}
-    </div>
-    ${p.description ? `<div class="proj-desc">${p.description}</div>` : ''}
-    ${p.bullets?.length ? `<ul>${p.bullets.map(b => `<li>${b}</li>`).join('')}</ul>` : ''}
-  </div>`).join('')
-
-  const certsHTML = data.certifications.length ? `
-  <div class="cert-wrap">${data.certifications.map(c => `<span class="cert-tag">✓ ${c}</span>`).join('')}</div>` : ''
-
-  const sectionH = (t: string) => `<div class="sec-head"><span class="sec-title">${t}</span><div class="sec-line"></div></div>`
-
-  if (isSidebar) {
-    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${data.name}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:${font};font-size:9.5pt;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-@page{size:A4;margin:0}
-.wrap{display:flex;width:210mm;min-height:297mm}
-.side{width:70mm;background:${accent};color:#fff;padding:30px 18px;flex-shrink:0}
-.main{flex:1;padding:28px 22px}
-.av{width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;margin:0 auto 12px;text-transform:uppercase}
-.s-name{font-size:14.5pt;font-weight:800;text-align:center;line-height:1.2;margin-bottom:3px}
-.s-title{font-size:8.5pt;text-align:center;opacity:.7;font-style:italic;margin-bottom:20px}
-.s-label{font-size:6.5pt;font-weight:800;text-transform:uppercase;letter-spacing:2px;opacity:.45;border-bottom:1px solid rgba(255,255,255,.18);padding-bottom:3px;margin-bottom:8px}
-.s-block{margin-bottom:16px}
-.s-line{font-size:8pt;opacity:.78;margin-bottom:4px;line-height:1.45;word-break:break-word}
-.s-skill-cat{font-size:7.5pt;font-weight:700;opacity:.88;margin-bottom:1px}
-.s-skill-val{font-size:7pt;opacity:.62;margin-bottom:5px;line-height:1.4}
-.s-cert{font-size:7.5pt;opacity:.72;margin-bottom:3px;padding-left:11px;position:relative}
-.s-cert::before{content:"✓";position:absolute;left:0}
-.m-sec{margin-bottom:15px}
-.sec-head{display:flex;align-items:center;gap:9px;margin-bottom:9px}
-.sec-title{font-size:7.5pt;font-weight:800;text-transform:uppercase;letter-spacing:1.8px;color:${accent};white-space:nowrap}
-.sec-line{flex:1;height:1.5px;background:${accent};opacity:.25}
-.summary{font-size:9pt;line-height:1.7;color:#444}
-.item{margin-bottom:11px}
-.item-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px;gap:8px}
-.item-title{font-weight:700;font-size:9.5pt;color:#111}
-.item-sub{font-size:8.5pt;color:${accent};font-style:italic}
-.item-date{font-size:8pt;color:#888;white-space:nowrap;flex-shrink:0}
-ul{padding-left:14px;margin-top:3px}
-li{font-size:8.5pt;line-height:1.58;color:#444;margin-bottom:1.5px}
-.edu-row{display:flex;justify-content:space-between;margin-bottom:8px;gap:8px}
-.skill-row{display:flex;gap:9px;margin-bottom:3px;font-size:9pt}
-.skill-cat{font-weight:700;width:130px;flex-shrink:0;color:#333}
-.skill-val{color:#555}
-.proj-desc{font-size:8.5pt;color:#555;margin:3px 0 2px;line-height:1.45}
-.cert-wrap{display:flex;flex-wrap:wrap;gap:5px}
-.cert-tag{font-size:8.5pt;border:1px solid ${accent}55;padding:2px 10px;border-radius:3px;color:${accent}}
-</style></head><body><div class="wrap">
-<div class="side">
-  <div class="av">${data.name ? data.name[0] : 'R'}</div>
-  <div class="s-name">${data.name || 'Full Name'}</div>
-  <div class="s-title">${data.title || ''}</div>
-  <div class="s-block">
-    <div class="s-label">Contact</div>
-    ${data.email ? `<div class="s-line">✉ ${data.email}</div>` : ''}
-    ${data.phone ? `<div class="s-line">📱 ${data.phone}</div>` : ''}
-    ${data.location ? `<div class="s-line">📍 ${data.location}</div>` : ''}
-    ${data.linkedin ? `<div class="s-line">🔗 ${data.linkedin}</div>` : ''}
-    ${data.github ? `<div class="s-line">⌨ ${data.github}</div>` : ''}
-  </div>
-  ${data.skills.length ? `<div class="s-block"><div class="s-label">Skills</div>${data.skills.map(s => `<div class="s-skill-cat">${s.category}</div><div class="s-skill-val">${s.items.join(' · ')}</div>`).join('')}</div>` : ''}
-  ${data.languages.length ? `<div class="s-block"><div class="s-label">Languages</div>${data.languages.map(l => `<div class="s-line">${l.language} <span style="opacity:.5">(${l.level})</span></div>`).join('')}</div>` : ''}
-  ${data.certifications.length ? `<div class="s-block"><div class="s-label">Certifications</div>${data.certifications.map(c => `<div class="s-cert">${c}</div>`).join('')}</div>` : ''}
-</div>
-<div class="main">
-  ${data.summary ? `<div class="m-sec">${sectionH('Professional Profile')}<p class="summary">${data.summary}</p></div>` : ''}
-  ${data.experience.length ? `<div class="m-sec">${sectionH('Work Experience')}${expHTML}</div>` : ''}
-  ${data.education.length ? `<div class="m-sec">${sectionH('Education')}${eduHTML}</div>` : ''}
-  ${data.projects.length ? `<div class="m-sec">${sectionH('Projects')}${projHTML}</div>` : ''}
-</div>
-</div></body></html>`
-  }
-
-  // Single-column base
-  const headerCSS = isTechHeader
-    ? `.header{background:${accent};color:#fff;padding:22px 22px 18px;margin:-18mm -20mm 18px}`
-    : isAccentBar
-    ? `.header{border-left:5px solid ${accent};padding:0 0 12px 16px;margin-bottom:16px}`
-    : `.header{border-bottom:2.5px solid ${accent};padding-bottom:12px;margin-bottom:16px}`
-
-  const nameColor = isTechHeader ? '#fff' : accent
-  const subColor = isTechHeader ? 'rgba(255,255,255,.75)' : '#555'
-  const contactColor = isTechHeader ? 'rgba(255,255,255,.65)' : '#666'
-
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${data.name}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:${font};font-size:9.5pt;color:#1a1a1a;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:18mm 20mm}
-@page{size:A4;margin:0}
-${headerCSS}
-.name{font-size:22pt;font-weight:900;color:${nameColor};letter-spacing:-.5px;line-height:1.1}
-.title-line{font-size:10.5pt;color:${subColor};margin:4px 0 7px}
-.contacts{display:flex;flex-wrap:wrap;gap:3px 14px;font-size:8.5pt;color:${contactColor}}
-.sec-head{display:flex;align-items:center;gap:9px;margin-bottom:9px}
-.sec-title{font-size:7.5pt;font-weight:800;text-transform:uppercase;letter-spacing:1.8px;color:${accent};white-space:nowrap}
-.sec-line{flex:1;height:1.5px;background:${accent};opacity:.28}
-.section{margin-bottom:14px}
-.summary{font-size:9pt;line-height:1.72;color:#444}
-.item{margin-bottom:11px}
-.item-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px;gap:8px}
-.item-title{font-weight:700;font-size:9.5pt;color:#111}
-.item-sub{font-size:8.5pt;color:${accent};font-style:italic}
-.item-date{font-size:8pt;color:#888;white-space:nowrap;flex-shrink:0}
-ul{padding-left:14px;margin-top:3px}
-li{font-size:8.5pt;line-height:1.58;color:#444;margin-bottom:1.5px}
-.edu-row{display:flex;justify-content:space-between;margin-bottom:8px;gap:8px}
-.skill-row{display:flex;gap:9px;margin-bottom:4px;font-size:9pt}
-.skill-cat{font-weight:700;width:130px;flex-shrink:0;color:#333}
-.skill-val{color:#555;flex:1}
-.proj-desc{font-size:8.5pt;color:#555;margin:3px 0 2px;line-height:1.45}
-.cert-wrap{display:flex;flex-wrap:wrap;gap:5px}
-.cert-tag{font-size:8.5pt;border:1px solid ${accent}55;padding:2px 10px;border-radius:3px;color:${accent}}
-</style></head><body>
-<div class="header">
-  <div class="name">${data.name || 'Your Name'}</div>
-  ${data.title ? `<div class="title-line">${data.title}</div>` : ''}
-  <div class="contacts">${contacts}</div>
-</div>
-${data.summary ? `<div class="section">${sectionH('Professional Summary')}<p class="summary">${data.summary}</p></div>` : ''}
-${data.experience.length ? `<div class="section">${sectionH('Work Experience')}${expHTML}</div>` : ''}
-${data.education.length ? `<div class="section">${sectionH('Education')}${eduHTML}</div>` : ''}
-${data.skills.length ? `<div class="section">${sectionH('Technical Skills')}${skillsHTML}</div>` : ''}
-${data.projects.length ? `<div class="section">${sectionH('Projects')}${projHTML}</div>` : ''}
-${data.certifications.length ? `<div class="section">${sectionH('Certifications')}${certsHTML}</div>` : ''}
-${data.languages.length ? `<div class="section">${sectionH('Languages')}<div style="display:flex;gap:16px;flex-wrap:wrap">${data.languages.map(l => `<span style="font-size:9pt"><strong>${l.language}</strong> <span style="color:#888">(${l.level})</span></span>`).join('')}</div></div>` : ''}
-</body></html>`
+Return ONLY a raw JSON object matching this exact TypeScript interface:
+{
+  name: string, email: string, phone: string, location: string,
+  linkedin: string, github: string, portfolio: string,
+  headline: string, summary: string,
+  experience: [{ company: string, role: string, duration: string, location: string, bullets: string[] }],
+  education: [{ degree: string, institution: string, year: string, score: string }],
+  skills: { technical: string[], tools: string[], soft: string[], languages: string[] },
+  projects: [{ name: string, tech: string, description: string, url: string, impact: string }],
+  certifications: [{ name: string, issuer: string, year: string, url: string }],
+  achievements: string[]
 }
 
-// ─── DOWNLOAD ─────────────────────────────────────────────────────────────────
+Rules:
+- If fresher (0 years): create 2 realistic internship experiences + strong academic projects
+- Use strong action verbs: Led, Built, Developed, Optimized, Reduced, Increased, Deployed, Architected
+- Quantify everything: percentages, user counts, time saved, scale, LPA
+- Use Indian context: TCS, Infosys, Swiggy, Zomato, Flipkart, Wipro, Bangalore, Mumbai, Hyderabad, Delhi
+- Generate realistic LinkedIn/GitHub URLs from the name (e.g. linkedin.com/in/firstname-lastname)
+- Summary: 2-3 sentences, powerful, tailored to the role
+- 3-4 bullet points per experience, each with a number/metric
+- Include 2-3 projects minimum with realistic tech stacks
+- ATS keywords for the target role throughout
+- Certifications: include 1-2 relevant ones (AWS, Google, Coursera etc.)
+- If info is missing, intelligently fill in realistic details`
 
-function downloadPDF(data: ResumeData, template: typeof TEMPLATES[0]) {
-  const html = buildPDFHTML(data, template)
-  const fname = `${(data.name || 'resume').replace(/\s+/g, '_')}_${data.documentType}`
-
-  const win = window.open('', '_blank')
-  if (!win) {
-    // popup blocked — fallback direct download
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `${fname}.html`
-    a.click()
-    return
-  }
-
-  win.document.write(`<!DOCTYPE html><html><head>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
-  </head><body style="margin:0">
-  <div id="c"></div>
-  <script>
-    window.onload=function(){
-      const c=document.getElementById('c');
-      c.innerHTML=${JSON.stringify(html)};
-      // extract inner body
-      const p=new DOMParser();
-      const d=p.parseFromString(${JSON.stringify(html)},'text/html');
-      document.head.innerHTML=d.head.innerHTML;
-      document.body.innerHTML=d.body.innerHTML;
-      html2pdf().set({
-        margin:0,filename:'${fname}.pdf',
-        image:{type:'jpeg',quality:0.99},
-        html2canvas:{scale:2,useCORS:true,letterRendering:true},
-        jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
-      }).from(document.body).save().then(()=>setTimeout(()=>window.close(),500));
-    }
-  <\/script>
-  </body></html>`)
-  win.document.close()
+  const raw = await callAI(prompt, 'Return only raw valid JSON. No markdown. No backticks. No explanation. No text before or after the JSON object.')
+  const cleaned = raw.replace(/```json|```/g, '').trim()
+  return JSON.parse(cleaned) as ResumeData
 }
 
-// ─── RESUME PREVIEW (React) ───────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
-function ResumePreview({ data, template }: { data: ResumeData; template: typeof TEMPLATES[0] }) {
-  const { accent, font } = template
-  const isSidebar = template.layout === 'sidebar'
-  const isTech = template.layout === 'tech-header'
-  const isBar = template.layout === 'accent-bar'
-
-  const SH = ({ title }: { title: string }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, marginTop: 2 }}>
-      <span style={{ fontSize: 7, fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: '1.8px', color: accent, whiteSpace: 'nowrap' as const }}>{title}</span>
-      <div style={{ flex: 1, height: 1.5, background: accent, opacity: 0.25 }} />
-    </div>
-  )
-
-  const ExpItems = () => (
-    <>{data.experience.map((e, i) => (
-      <div key={i} style={{ marginBottom: 10 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
-          <div>
-            <span style={{ fontWeight: 700, fontSize: 9, color: '#111', display: 'block' }}>{e.role}</span>
-            <span style={{ fontSize: 8, color: accent, fontStyle: 'italic' }}>{e.company}{e.location ? ` · ${e.location}` : ''}</span>
-          </div>
-          <span style={{ fontSize: 7.5, color: '#888', whiteSpace: 'nowrap' as const, flexShrink: 0 }}>{e.duration}</span>
-        </div>
-        <ul style={{ paddingLeft: 13, marginTop: 3 }}>
-          {e.bullets.map((b, j) => <li key={j} style={{ fontSize: 8, color: '#444', lineHeight: 1.55, marginBottom: 1.5 }}>{b}</li>)}
-        </ul>
-      </div>
-    ))}</>
-  )
-
-  const EduItems = () => (
-    <>{data.education.map((e, i) => (
-      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 7 }}>
-        <div>
-          <p style={{ fontWeight: 700, fontSize: 9, color: '#111' }}>{e.degree}{e.field ? ` in ${e.field}` : ''}</p>
-          <p style={{ fontSize: 8, color: '#666', marginTop: 1 }}>{e.institution}</p>
-        </div>
-        <div style={{ textAlign: 'right' as const, flexShrink: 0 }}>
-          <p style={{ fontSize: 8, color: '#888' }}>{e.year}</p>
-          {e.cgpa && <p style={{ fontSize: 8, fontWeight: 700, color: accent }}>{e.cgpa}</p>}
-        </div>
-      </div>
-    ))}</>
-  )
-
-  const SkillItems = () => (
-    <>{data.skills.map((s, i) => (
-      <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3, fontSize: 8.5 }}>
-        <span style={{ fontWeight: 700, width: 110, flexShrink: 0, color: '#333' }}>{s.category}:</span>
-        <span style={{ color: '#555', flex: 1 }}>{s.items.join(', ')}</span>
-      </div>
-    ))}</>
-  )
-
-  const ProjItems = () => (
-    <>{data.projects.map((p, i) => (
-      <div key={i} style={{ marginBottom: 9 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginBottom: 2, flexWrap: 'wrap' as const }}>
-          <span style={{ fontWeight: 700, fontSize: 9, color: '#111' }}>{p.name}</span>
-          <span style={{ fontSize: 7.5, color: '#888', fontStyle: 'italic' }}>· {p.tech}</span>
-          {p.link && <span style={{ fontSize: 7.5, color: accent, marginLeft: 'auto' }}>{p.link}</span>}
-        </div>
-        {p.description && <p style={{ fontSize: 8, color: '#555', lineHeight: 1.45, marginBottom: 2 }}>{p.description}</p>}
-        {p.bullets?.length > 0 && <ul style={{ paddingLeft: 13 }}>{p.bullets.map((b, j) => <li key={j} style={{ fontSize: 8, color: '#444', lineHeight: 1.5 }}>{b}</li>)}</ul>}
-      </div>
-    ))}</>
-  )
-
-  // SIDEBAR layout
-  if (isSidebar) return (
-    <div style={{ display: 'flex', background: 'white', fontFamily: font, fontSize: 9, boxShadow: '0 8px 40px rgba(0,0,0,0.14)', minHeight: 800 }}>
-      <div style={{ width: '34%', background: accent, color: 'white', padding: '24px 15px', flexShrink: 0 }}>
-        <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 900, margin: '0 auto 10px', textTransform: 'uppercase' as const }}>{data.name ? data.name[0] : 'R'}</div>
-        <p style={{ fontSize: 12.5, fontWeight: 800, textAlign: 'center', marginBottom: 2 }}>{data.name || 'Full Name'}</p>
-        <p style={{ fontSize: 8, textAlign: 'center', opacity: 0.68, marginBottom: 18, fontStyle: 'italic' }}>{data.title}</p>
-        {/* Contact */}
-        <div style={{ marginBottom: 14 }}>
-          <p style={{ fontSize: 6.5, fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: '2px', opacity: 0.42, borderBottom: '1px solid rgba(255,255,255,0.18)', paddingBottom: 3, marginBottom: 7 }}>Contact</p>
-          {data.email && <p style={{ fontSize: 7.5, opacity: 0.8, marginBottom: 3.5 }}>✉ {data.email}</p>}
-          {data.phone && <p style={{ fontSize: 7.5, opacity: 0.8, marginBottom: 3.5 }}>📱 {data.phone}</p>}
-          {data.location && <p style={{ fontSize: 7.5, opacity: 0.8, marginBottom: 3.5 }}>📍 {data.location}</p>}
-          {data.linkedin && <p style={{ fontSize: 7.5, opacity: 0.76, marginBottom: 3.5, wordBreak: 'break-all' as const }}>🔗 {data.linkedin}</p>}
-          {data.github && <p style={{ fontSize: 7.5, opacity: 0.76, marginBottom: 3.5 }}>⌨ {data.github}</p>}
-        </div>
-        {/* Skills */}
-        {data.skills.length > 0 && <div style={{ marginBottom: 14 }}>
-          <p style={{ fontSize: 6.5, fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: '2px', opacity: 0.42, borderBottom: '1px solid rgba(255,255,255,0.18)', paddingBottom: 3, marginBottom: 8 }}>Skills</p>
-          {data.skills.map((s, i) => <div key={i} style={{ marginBottom: 6 }}>
-            <p style={{ fontSize: 7.5, fontWeight: 700, opacity: 0.88, marginBottom: 1.5 }}>{s.category}</p>
-            <p style={{ fontSize: 7, opacity: 0.6, lineHeight: 1.45 }}>{s.items.join(' · ')}</p>
-          </div>)}
-        </div>}
-        {/* Certs */}
-        {data.certifications.length > 0 && <div>
-          <p style={{ fontSize: 6.5, fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: '2px', opacity: 0.42, borderBottom: '1px solid rgba(255,255,255,0.18)', paddingBottom: 3, marginBottom: 7 }}>Certifications</p>
-          {data.certifications.map((c, i) => <p key={i} style={{ fontSize: 7.5, opacity: 0.72, marginBottom: 3.5 }}>✓ {c}</p>)}
-        </div>}
-      </div>
-      {/* Main */}
-      <div style={{ flex: 1, padding: '24px 18px' }}>
-        {data.summary && <div style={{ marginBottom: 13 }}><SH title="Professional Profile" /><p style={{ fontSize: 8.5, color: '#444', lineHeight: 1.7 }}>{data.summary}</p></div>}
-        {data.experience.length > 0 && <div style={{ marginBottom: 13 }}><SH title="Work Experience" /><ExpItems /></div>}
-        {data.education.length > 0 && <div style={{ marginBottom: 13 }}><SH title="Education" /><EduItems /></div>}
-        {data.projects.length > 0 && <div><SH title="Projects" /><ProjItems /></div>}
-      </div>
-    </div>
-  )
-
-  // Single-column variants
-  const headerStyle: React.CSSProperties = isTech
-    ? { background: accent, color: 'white', padding: '18px 22px', marginBottom: 16 }
-    : isBar
-    ? { borderLeft: `5px solid ${accent}`, paddingLeft: 15, paddingBottom: 11, marginBottom: 16 }
-    : { borderBottom: `2.5px solid ${accent}`, paddingBottom: 11, marginBottom: 15 }
-
+function TypingDots() {
   return (
-    <div style={{ background: 'white', fontFamily: font, fontSize: 9, padding: '22px 26px', boxShadow: '0 8px 40px rgba(0,0,0,0.14)', minHeight: 800 }}>
-      <div style={headerStyle}>
-        <p style={{ fontSize: 20, fontWeight: 900, color: isTech ? 'white' : accent, letterSpacing: '-0.5px', lineHeight: 1.1 }}>{data.name || 'Your Name'}</p>
-        {data.title && <p style={{ fontSize: 10, color: isTech ? 'rgba(255,255,255,.75)' : '#555', margin: '4px 0 6px' }}>{data.title}</p>}
-        <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '2px 12px', fontSize: 8, color: isTech ? 'rgba(255,255,255,.65)' : '#666' }}>
+    <div className="flex items-center gap-1 px-4 py-3">
+      {[0, 1, 2].map(i => (
+        <motion.div
+          key={i}
+          className="w-2 h-2 rounded-full bg-indigo-400"
+          animate={{ y: [0, -6, 0] }}
+          transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ─── Template Components ───────────────────────────────────────────────────────
+
+function ClassicTemplate({ data, theme }: { data: ResumeData; theme: Theme }) {
+  const t = theme
+  return (
+    <div id="resume-preview-content" style={{ fontFamily: 'Georgia, serif', background: '#fff', minHeight: '1122px', color: '#1a1a2e' }}>
+      {/* Header */}
+      <div style={{ background: t.primary, color: '#fff', padding: '32px 40px 24px' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '0.02em', marginBottom: '4px' }}>
+          {data.name || 'Your Name'}
+        </h1>
+        <p style={{ fontSize: '14px', opacity: 0.85, marginBottom: '12px', fontStyle: 'italic' }}>
+          {data.headline || 'Professional Headline'}
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', fontSize: '12px', opacity: 0.9 }}>
           {data.email && <span>✉ {data.email}</span>}
-          {data.phone && <span>📱 {data.phone}</span>}
+          {data.phone && <span>📞 {data.phone}</span>}
           {data.location && <span>📍 {data.location}</span>}
-          {data.linkedin && <span>🔗 {data.linkedin}</span>}
-          {data.github && <span>⌨ {data.github}</span>}
+          {data.linkedin && <span>in {data.linkedin}</span>}
+          {data.github && <span>⌥ {data.github}</span>}
         </div>
       </div>
-      {data.summary && <div style={{ marginBottom: 13 }}><SH title="Professional Summary" /><p style={{ fontSize: 8.5, color: '#444', lineHeight: 1.72 }}>{data.summary}</p></div>}
-      {data.experience.length > 0 && <div style={{ marginBottom: 13 }}><SH title="Work Experience" /><ExpItems /></div>}
-      {data.education.length > 0 && <div style={{ marginBottom: 13 }}><SH title="Education" /><EduItems /></div>}
-      {data.skills.length > 0 && <div style={{ marginBottom: 13 }}><SH title="Technical Skills" /><SkillItems /></div>}
-      {data.projects.length > 0 && <div style={{ marginBottom: 13 }}><SH title="Projects" /><ProjItems /></div>}
-      {data.certifications.length > 0 && <div style={{ marginBottom: 13 }}>
-        <SH title="Certifications" />
-        <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5 }}>
-          {data.certifications.map((c, i) => <span key={i} style={{ fontSize: 8, border: `1px solid ${accent}55`, padding: '2px 10px', borderRadius: 3, color: accent }}>✓ {c}</span>)}
-        </div>
-      </div>}
-      {data.languages.length > 0 && <div>
-        <SH title="Languages" />
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' as const }}>
-          {data.languages.map((l, i) => <span key={i} style={{ fontSize: 8.5 }}><strong>{l.language}</strong> <span style={{ color: '#888' }}>({l.level})</span></span>)}
-        </div>
-      </div>}
+
+      <div style={{ padding: '28px 40px' }}>
+        {/* Summary */}
+        {data.summary && (
+          <section style={{ marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, borderBottom: `2px solid ${t.accent}`, paddingBottom: '6px', marginBottom: '10px' }}>
+              Professional Summary
+            </h2>
+            <p style={{ fontSize: '13px', lineHeight: 1.7, color: '#374151' }}>{data.summary}</p>
+          </section>
+        )}
+
+        {/* Experience */}
+        {data.experience.length > 0 && (
+          <section style={{ marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, borderBottom: `2px solid ${t.accent}`, paddingBottom: '6px', marginBottom: '14px' }}>
+              Work Experience
+            </h2>
+            {data.experience.map((exp, i) => (
+              <div key={i} style={{ marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: '14px', color: '#111827' }}>{exp.role}</p>
+                    <p style={{ fontSize: '13px', color: t.accent, fontWeight: 600 }}>{exp.company}</p>
+                  </div>
+                  <div style={{ textAlign: 'right', fontSize: '12px', color: '#6b7280' }}>
+                    <p>{exp.duration}</p>
+                    <p>{exp.location}</p>
+                  </div>
+                </div>
+                <ul style={{ marginTop: '8px', paddingLeft: '18px' }}>
+                  {exp.bullets.map((b, j) => (
+                    <li key={j} style={{ fontSize: '12.5px', lineHeight: 1.7, color: '#374151', marginBottom: '3px' }}>{b}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* Skills */}
+        {(data.skills.technical.length > 0 || data.skills.tools.length > 0) && (
+          <section style={{ marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, borderBottom: `2px solid ${t.accent}`, paddingBottom: '6px', marginBottom: '12px' }}>
+              Skills
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              {data.skills.languages.length > 0 && <div><span style={{ fontWeight: 700, fontSize: '12px' }}>Languages: </span><span style={{ fontSize: '12px', color: '#374151' }}>{data.skills.languages.join(', ')}</span></div>}
+              {data.skills.technical.length > 0 && <div><span style={{ fontWeight: 700, fontSize: '12px' }}>Technical: </span><span style={{ fontSize: '12px', color: '#374151' }}>{data.skills.technical.join(', ')}</span></div>}
+              {data.skills.tools.length > 0 && <div><span style={{ fontWeight: 700, fontSize: '12px' }}>Tools: </span><span style={{ fontSize: '12px', color: '#374151' }}>{data.skills.tools.join(', ')}</span></div>}
+              {data.skills.soft.length > 0 && <div><span style={{ fontWeight: 700, fontSize: '12px' }}>Soft Skills: </span><span style={{ fontSize: '12px', color: '#374151' }}>{data.skills.soft.join(', ')}</span></div>}
+            </div>
+          </section>
+        )}
+
+        {/* Education */}
+        {data.education.length > 0 && (
+          <section style={{ marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, borderBottom: `2px solid ${t.accent}`, paddingBottom: '6px', marginBottom: '12px' }}>
+              Education
+            </h2>
+            {data.education.map((edu, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: '13px' }}>{edu.degree}</p>
+                  <p style={{ fontSize: '12.5px', color: t.accent }}>{edu.institution}</p>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '12px', color: '#6b7280' }}>
+                  <p>{edu.year}</p>
+                  {edu.score && <p>{edu.score}</p>}
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* Projects */}
+        {data.projects.length > 0 && (
+          <section style={{ marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, borderBottom: `2px solid ${t.accent}`, paddingBottom: '6px', marginBottom: '12px' }}>
+              Projects
+            </h2>
+            {data.projects.map((p, i) => (
+              <div key={i} style={{ marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <p style={{ fontWeight: 700, fontSize: '13px' }}>{p.name}</p>
+                  {p.url && <p style={{ fontSize: '11px', color: t.accent }}>{p.url}</p>}
+                </div>
+                <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Tech: {p.tech}</p>
+                <p style={{ fontSize: '12.5px', color: '#374151' }}>{p.description}</p>
+                {p.impact && <p style={{ fontSize: '12px', color: t.accent, fontStyle: 'italic', marginTop: '3px' }}>▲ {p.impact}</p>}
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* Certifications */}
+        {data.certifications.length > 0 && (
+          <section style={{ marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, borderBottom: `2px solid ${t.accent}`, paddingBottom: '6px', marginBottom: '12px' }}>
+              Certifications
+            </h2>
+            {data.certifications.map((c, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12.5px', fontWeight: 600 }}>{c.name} — <span style={{ color: t.accent }}>{c.issuer}</span></span>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>{c.year}</span>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* Achievements */}
+        {data.achievements.length > 0 && (
+          <section>
+            <h2 style={{ fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, borderBottom: `2px solid ${t.accent}`, paddingBottom: '6px', marginBottom: '10px' }}>
+              Achievements
+            </h2>
+            <ul style={{ paddingLeft: '18px' }}>
+              {data.achievements.map((a, i) => (
+                <li key={i} style={{ fontSize: '12.5px', color: '#374151', marginBottom: '4px' }}>{a}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
     </div>
   )
 }
 
-// ─── MAIN PAGE ────────────────────────────────────────────────────────────────
-
-export default function ResumeStudioPage() {
-  const [resumeData, setResumeData] = useState<ResumeData>(emptyResume())
-  const [template, setTemplate] = useState(TEMPLATES[0])
-  const [messages, setMessages] = useState<Message[]>([{
-    role: 'ai',
-    text: "Hi! I'm Aria, your resume expert. 👋\n\nI'll build you a professional, ATS-optimized resume through a quick conversation.\n\nAre you building a **Resume** or **CV**? And what role are you targeting?",
-    timestamp: Date.now()
-  }])
-  const [collected, setCollected] = useState<Partial<ResumeData>>({})
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [hasResume, setHasResume] = useState(false)
-  const [activeView, setActiveView] = useState<'chat' | 'preview'>('chat')
-  const [showTemplates, setShowTemplates] = useState(false)
-  const [isDownloading, setIsDownloading] = useState(false)
-  const chatEndRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  useEffect(() => {
-    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 80)
-  }, [messages, loading])
-
-  const send = useCallback(async (text?: string) => {
-    const msg = (text || input).trim()
-    if (!msg || loading) return
-    setInput('')
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
-
-    const newMsg: Message = { role: 'user', text: msg, timestamp: Date.now() }
-    const newMsgs = [...messages, newMsg]
-    setMessages(newMsgs)
-    setLoading(true)
-
-    try {
-      const result = await callAI(msg, messages, collected)
-      setCollected(prev => ({ ...prev, ...result.collectedUpdate }))
-      const aiMsg: Message = { role: 'ai', text: result.reply, timestamp: Date.now() }
-      setMessages([...newMsgs, aiMsg])
-
-      if (result.readyToGenerate && result.resumeData) {
-        const rd = result.resumeData
-        // Normalize arrays
-        rd.experience = (rd.experience || []).map((e, i) => ({ ...e, id: e.id || `exp-${i}` }))
-        rd.education  = (rd.education  || []).map((e, i) => ({ ...e, id: e.id || `edu-${i}`, field: e.field || '' }))
-        rd.skills     = (rd.skills     || []).map((s, i) => ({ ...s, id: s.id || `sk-${i}`, items: Array.isArray(s.items) ? s.items : String(s.items).split(',').map((x: string) => x.trim()) }))
-        rd.projects   = (rd.projects   || []).map((p, i) => ({ ...p, id: p.id || `pr-${i}`, bullets: p.bullets || [] }))
-        rd.certifications = rd.certifications || []
-        rd.languages  = rd.languages || []
-        setResumeData(rd)
-        setHasResume(true)
-        setTimeout(() => setActiveView('preview'), 500)
-      }
-    } catch {
-      setMessages([...newMsgs, { role: 'ai', text: 'Something went wrong. Please try again.', timestamp: Date.now() }])
-    } finally {
-      setLoading(false)
-    }
-  }, [input, loading, messages, collected])
-
-  const handleDownload = async () => {
-    if (!hasResume || isDownloading) return
-    setIsDownloading(true)
-    downloadPDF(resumeData, template)
-    setTimeout(() => setIsDownloading(false), 2500)
-  }
-
-  const reset = () => {
-    setResumeData(emptyResume()); setHasResume(false); setCollected({})
-    setMessages([{ role: 'ai', text: "Starting fresh! I'm Aria. Resume or CV — and what role are you targeting?", timestamp: Date.now() }])
-    setActiveView('chat'); setInput('')
-  }
-
-  const quickPrompts = [
-    "Resume for Software Engineer",
-    "Resume for Data Scientist",
-    "Resume for Product Manager",
-    "CV for Research position",
-    "I'm a fresher — help me build",
-    "You choose everything, just generate"
-  ]
-
-  const questionCount = messages.filter(m => m.role === 'ai').length
-
+function ModernTemplate({ data, theme }: { data: ResumeData; theme: Theme }) {
+  const t = theme
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#eef1f5', fontFamily: '"Segoe UI", -apple-system, system-ui, sans-serif', overflow: 'hidden' }}>
+    <div id="resume-preview-content" style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", background: '#fff', minHeight: '1122px', display: 'flex' }}>
+      {/* Sidebar */}
+      <div style={{ width: '32%', background: t.sidebar, color: '#fff', padding: '32px 20px', flexShrink: 0 }}>
+        {/* Avatar placeholder */}
+        <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 700, border: '3px solid rgba(255,255,255,0.3)' }}>
+          {(data.name || 'U').charAt(0)}
+        </div>
+        <h1 style={{ fontSize: '18px', fontWeight: 700, textAlign: 'center', marginBottom: '4px' }}>{data.name || 'Your Name'}</h1>
+        <p style={{ fontSize: '11px', textAlign: 'center', opacity: 0.8, marginBottom: '24px', fontStyle: 'italic' }}>{data.headline || 'Professional Title'}</p>
 
-      {/* ── TOPBAR ── */}
-      <header style={{ background: 'white', borderBottom: '1px solid #e2e8f0', padding: '0 16px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', zIndex: 30 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg,#1d4ed8,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(29,78,216,.3)' }}>
-            <FileText size={16} color="white" />
-          </div>
-          <div>
-            <p style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.3px', lineHeight: 1.2 }}>Resume Studio</p>
-            <p style={{ fontSize: 10, color: '#94a3b8', margin: 0 }}>LYU · AI-powered · 6 Templates</p>
-          </div>
+        {/* Contact */}
+        <div style={{ marginBottom: '24px' }}>
+          <h3 style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.7, marginBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '4px' }}>Contact</h3>
+          {data.email && <p style={{ fontSize: '11px', marginBottom: '6px', opacity: 0.9 }}>✉ {data.email}</p>}
+          {data.phone && <p style={{ fontSize: '11px', marginBottom: '6px', opacity: 0.9 }}>📞 {data.phone}</p>}
+          {data.location && <p style={{ fontSize: '11px', marginBottom: '6px', opacity: 0.9 }}>📍 {data.location}</p>}
+          {data.linkedin && <p style={{ fontSize: '10px', marginBottom: '4px', opacity: 0.8, wordBreak: 'break-all' }}>in {data.linkedin}</p>}
+          {data.github && <p style={{ fontSize: '10px', opacity: 0.8, wordBreak: 'break-all' }}>⌥ {data.github}</p>}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {/* View toggle */}
-          <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 8, padding: 2, gap: 1 }}>
-            {(['chat', 'preview'] as const).map(v => (
-              <button key={v} onClick={() => setActiveView(v)}
-                style={{ padding: '5px 12px', borderRadius: 6, border: 'none', fontWeight: 600, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', background: activeView === v ? 'white' : 'transparent', color: activeView === v ? '#1d4ed8' : '#64748b', boxShadow: activeView === v ? '0 1px 4px rgba(0,0,0,.1)' : 'none' }}>
-                {v === 'chat' ? '💬 Chat' : '👁 Preview'}
-              </button>
+        {/* Skills */}
+        {data.skills.languages.length > 0 && (
+          <div style={{ marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.7, marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '4px' }}>Languages</h3>
+            {data.skills.languages.map((s, i) => (
+              <div key={i} style={{ marginBottom: '4px' }}>
+                <span style={{ fontSize: '11px', opacity: 0.9 }}>{s}</span>
+              </div>
             ))}
           </div>
+        )}
 
-          {/* Template */}
-          <div style={{ position: 'relative' }}>
-            <button onClick={() => setShowTemplates(!showTemplates)}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 11px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#374151', fontFamily: 'inherit' }}>
-              <div style={{ width: 11, height: 11, borderRadius: 3, background: template.accent }} />
-              {template.name} <ChevronDown size={11} />
-            </button>
-            {showTemplates && (
-              <div style={{ position: 'absolute', right: 0, top: 42, background: 'white', border: '1px solid #e2e8f0', borderRadius: 14, padding: 12, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, boxShadow: '0 16px 48px rgba(0,0,0,.14)', zIndex: 100, width: 295 }}>
-                {TEMPLATES.map(t => (
-                  <button key={t.id} onClick={() => { setTemplate(t); setShowTemplates(false) }}
-                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '8px 6px', borderRadius: 8, border: template.id === t.id ? `2px solid ${t.accent}` : '2px solid #f1f5f9', background: template.id === t.id ? `${t.accent}12` : '#fafafa', cursor: 'pointer' }}>
-                    <div style={{ width: 42, height: 28, borderRadius: 5, background: t.preview }} />
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#374151' }}>{t.name}</span>
-                    <span style={{ fontSize: 8, color: '#94a3b8', textAlign: 'center', lineHeight: 1.3 }}>{t.description}</span>
-                  </button>
-                ))}
+        {data.skills.tools.length > 0 && (
+          <div style={{ marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.7, marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '4px' }}>Tools</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+              {data.skills.tools.map((s, i) => (
+                <span key={i} style={{ background: 'rgba(255,255,255,0.15)', fontSize: '10px', padding: '2px 7px', borderRadius: '10px' }}>{s}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Education in sidebar */}
+        {data.education.length > 0 && (
+          <div>
+            <h3 style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.7, marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '4px' }}>Education</h3>
+            {data.education.map((edu, i) => (
+              <div key={i} style={{ marginBottom: '10px' }}>
+                <p style={{ fontSize: '11px', fontWeight: 600, opacity: 0.95 }}>{edu.degree}</p>
+                <p style={{ fontSize: '10px', opacity: 0.75 }}>{edu.institution}</p>
+                <p style={{ fontSize: '10px', opacity: 0.65 }}>{edu.year} {edu.score && `· ${edu.score}`}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Certifications in sidebar */}
+        {data.certifications.length > 0 && (
+          <div style={{ marginTop: '16px' }}>
+            <h3 style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.7, marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '4px' }}>Certifications</h3>
+            {data.certifications.map((c, i) => (
+              <div key={i} style={{ marginBottom: '8px' }}>
+                <p style={{ fontSize: '11px', fontWeight: 600, opacity: 0.9 }}>{c.name}</p>
+                <p style={{ fontSize: '10px', opacity: 0.7 }}>{c.issuer} · {c.year}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Main Content */}
+      <div style={{ flex: 1, padding: '32px 28px', overflow: 'hidden' }}>
+        {/* Summary */}
+        {data.summary && (
+          <section style={{ marginBottom: '22px' }}>
+            <h2 style={{ fontSize: '14px', fontWeight: 700, color: t.primary, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ display: 'inline-block', width: '20px', height: '3px', background: t.accent, borderRadius: '2px' }} />
+              About Me
+            </h2>
+            <p style={{ fontSize: '12.5px', lineHeight: 1.75, color: '#374151' }}>{data.summary}</p>
+          </section>
+        )}
+
+        {/* Experience */}
+        {data.experience.length > 0 && (
+          <section style={{ marginBottom: '22px' }}>
+            <h2 style={{ fontSize: '14px', fontWeight: 700, color: t.primary, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ display: 'inline-block', width: '20px', height: '3px', background: t.accent, borderRadius: '2px' }} />
+              Experience
+            </h2>
+            {data.experience.map((exp, i) => (
+              <div key={i} style={{ marginBottom: '16px', borderLeft: `3px solid ${t.accent}`, paddingLeft: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: '13.5px', color: '#111' }}>{exp.role}</p>
+                    <p style={{ fontSize: '12.5px', color: t.accent, fontWeight: 600 }}>{exp.company} · {exp.location}</p>
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#9ca3af', background: t.bg, padding: '2px 8px', borderRadius: '10px', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: '8px' }}>{exp.duration}</span>
+                </div>
+                <ul style={{ marginTop: '6px', paddingLeft: '16px' }}>
+                  {exp.bullets.map((b, j) => (
+                    <li key={j} style={{ fontSize: '12px', lineHeight: 1.7, color: '#4b5563', marginBottom: '3px' }}>{b}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* Technical Skills */}
+        {data.skills.technical.length > 0 && (
+          <section style={{ marginBottom: '22px' }}>
+            <h2 style={{ fontSize: '14px', fontWeight: 700, color: t.primary, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ display: 'inline-block', width: '20px', height: '3px', background: t.accent, borderRadius: '2px' }} />
+              Technical Skills
+            </h2>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {data.skills.technical.map((s, i) => (
+                <span key={i} style={{ background: t.bg, color: t.primary, fontSize: '11.5px', padding: '4px 10px', borderRadius: '4px', fontWeight: 500, border: `1px solid ${t.accent}30` }}>{s}</span>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Projects */}
+        {data.projects.length > 0 && (
+          <section style={{ marginBottom: '22px' }}>
+            <h2 style={{ fontSize: '14px', fontWeight: 700, color: t.primary, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ display: 'inline-block', width: '20px', height: '3px', background: t.accent, borderRadius: '2px' }} />
+              Projects
+            </h2>
+            {data.projects.map((p, i) => (
+              <div key={i} style={{ marginBottom: '12px', padding: '12px', background: t.bg, borderRadius: '6px', borderLeft: `3px solid ${t.accent}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <p style={{ fontWeight: 700, fontSize: '13px' }}>{p.name}</p>
+                  {p.url && <span style={{ fontSize: '10px', color: t.accent }}>{p.url}</span>}
+                </div>
+                <p style={{ fontSize: '11px', color: t.accent, marginBottom: '4px' }}>Tech: {p.tech}</p>
+                <p style={{ fontSize: '12px', color: '#4b5563' }}>{p.description}</p>
+                {p.impact && <p style={{ fontSize: '11.5px', fontWeight: 600, color: t.primary, marginTop: '4px' }}>📈 {p.impact}</p>}
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* Achievements */}
+        {data.achievements.length > 0 && (
+          <section>
+            <h2 style={{ fontSize: '14px', fontWeight: 700, color: t.primary, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ display: 'inline-block', width: '20px', height: '3px', background: t.accent, borderRadius: '2px' }} />
+              Achievements
+            </h2>
+            <ul style={{ paddingLeft: '18px' }}>
+              {data.achievements.map((a, i) => (
+                <li key={i} style={{ fontSize: '12.5px', color: '#374151', marginBottom: '5px' }}>{a}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MinimalTemplate({ data, theme }: { data: ResumeData; theme: Theme }) {
+  const t = theme
+  return (
+    <div id="resume-preview-content" style={{ fontFamily: "'Georgia', serif", background: '#fff', minHeight: '1122px', padding: '48px 52px', color: '#1a1a1a' }}>
+      {/* Name + headline */}
+      <div style={{ borderBottom: `2px solid ${t.accent}`, paddingBottom: '18px', marginBottom: '28px' }}>
+        <h1 style={{ fontSize: '32px', fontWeight: 400, letterSpacing: '-0.02em', color: '#0d0d0d', marginBottom: '6px' }}>
+          {data.name || 'Your Name'}
+        </h1>
+        <p style={{ fontSize: '14px', color: '#666', fontStyle: 'italic', marginBottom: '10px' }}>{data.headline || 'Professional Headline'}</p>
+        <div style={{ display: 'flex', gap: '20px', fontSize: '12px', color: '#555', flexWrap: 'wrap' }}>
+          {data.email && <span>{data.email}</span>}
+          {data.phone && <span>{data.phone}</span>}
+          {data.location && <span>{data.location}</span>}
+          {data.linkedin && <span>{data.linkedin}</span>}
+        </div>
+      </div>
+
+      {/* Summary */}
+      {data.summary && (
+        <section style={{ marginBottom: '28px' }}>
+          <p style={{ fontSize: '13.5px', lineHeight: 1.9, color: '#333', maxWidth: '680px' }}>{data.summary}</p>
+        </section>
+      )}
+
+      {/* Experience */}
+      {data.experience.length > 0 && (
+        <section style={{ marginBottom: '28px' }}>
+          <h2 style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', color: '#999', marginBottom: '16px' }}>Experience</h2>
+          {data.experience.map((exp, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '16px', marginBottom: '20px' }}>
+              <div>
+                <p style={{ fontSize: '12px', color: '#666' }}>{exp.duration}</p>
+                <p style={{ fontSize: '12px', color: '#999' }}>{exp.location}</p>
+              </div>
+              <div>
+                <p style={{ fontWeight: 700, fontSize: '14px' }}>{exp.role}</p>
+                <p style={{ fontSize: '13px', color: t.accent, marginBottom: '8px' }}>{exp.company}</p>
+                <ul style={{ paddingLeft: '0', listStyle: 'none' }}>
+                  {exp.bullets.map((b, j) => (
+                    <li key={j} style={{ fontSize: '12.5px', lineHeight: 1.7, color: '#444', paddingLeft: '14px', position: 'relative', marginBottom: '4px' }}>
+                      <span style={{ position: 'absolute', left: 0, color: t.accent }}>—</span>
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* Education */}
+      {data.education.length > 0 && (
+        <section style={{ marginBottom: '28px' }}>
+          <h2 style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', color: '#999', marginBottom: '16px' }}>Education</h2>
+          {data.education.map((edu, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '16px', marginBottom: '12px' }}>
+              <p style={{ fontSize: '12px', color: '#666' }}>{edu.year}</p>
+              <div>
+                <p style={{ fontWeight: 700, fontSize: '14px' }}>{edu.degree}</p>
+                <p style={{ fontSize: '12.5px', color: '#444' }}>{edu.institution} {edu.score && `· ${edu.score}`}</p>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* Skills */}
+      {(data.skills.technical.length > 0 || data.skills.languages.length > 0) && (
+        <section style={{ marginBottom: '28px' }}>
+          <h2 style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', color: '#999', marginBottom: '14px' }}>Skills</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            {data.skills.languages.length > 0 && (
+              <p style={{ fontSize: '12.5px', color: '#333' }}><strong>Languages:</strong> {data.skills.languages.join(', ')}</p>
+            )}
+            {data.skills.technical.length > 0 && (
+              <p style={{ fontSize: '12.5px', color: '#333' }}><strong>Technical:</strong> {data.skills.technical.join(', ')}</p>
+            )}
+            {data.skills.tools.length > 0 && (
+              <p style={{ fontSize: '12.5px', color: '#333' }}><strong>Tools:</strong> {data.skills.tools.join(', ')}</p>
+            )}
+            {data.skills.soft.length > 0 && (
+              <p style={{ fontSize: '12.5px', color: '#333' }}><strong>Soft Skills:</strong> {data.skills.soft.join(', ')}</p>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Projects */}
+      {data.projects.length > 0 && (
+        <section style={{ marginBottom: '28px' }}>
+          <h2 style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', color: '#999', marginBottom: '16px' }}>Projects</h2>
+          {data.projects.map((p, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '16px', marginBottom: '14px' }}>
+              <p style={{ fontSize: '12px', color: '#666', fontStyle: 'italic' }}>{p.tech}</p>
+              <div>
+                <p style={{ fontWeight: 700, fontSize: '13.5px' }}>{p.name}</p>
+                <p style={{ fontSize: '12.5px', color: '#444', marginTop: '3px' }}>{p.description}</p>
+                {p.impact && <p style={{ fontSize: '12px', color: t.accent, marginTop: '3px' }}>{p.impact}</p>}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* Certifications */}
+      {data.certifications.length > 0 && (
+        <section>
+          <h2 style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', color: '#999', marginBottom: '14px' }}>Certifications</h2>
+          {data.certifications.map((c, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ fontSize: '12.5px' }}>{c.name} — {c.issuer}</span>
+              <span style={{ fontSize: '12px', color: '#666' }}>{c.year}</span>
+            </div>
+          ))}
+        </section>
+      )}
+    </div>
+  )
+}
+
+function ExecutiveTemplate({ data, theme }: { data: ResumeData; theme: Theme }) {
+  const t = theme
+  return (
+    <div id="resume-preview-content" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", background: '#fff', minHeight: '1122px', color: '#1a1a1a' }}>
+      {/* Executive Header */}
+      <div style={{ background: t.primary, color: '#fff', padding: '32px 44px 24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1 style={{ fontSize: '30px', fontWeight: 700, letterSpacing: '-0.01em', marginBottom: '4px' }}>{data.name || 'Your Name'}</h1>
+            <p style={{ fontSize: '14px', color: t.accent, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '12px' }}>{data.headline || 'Executive Title'}</p>
+          </div>
+          <div style={{ textAlign: 'right', fontSize: '12px', opacity: 0.9 }}>
+            {data.email && <p style={{ marginBottom: '4px' }}>{data.email}</p>}
+            {data.phone && <p style={{ marginBottom: '4px' }}>{data.phone}</p>}
+            {data.location && <p style={{ marginBottom: '4px' }}>📍 {data.location}</p>}
+            {data.linkedin && <p style={{ opacity: 0.8, fontSize: '11px' }}>{data.linkedin}</p>}
+          </div>
+        </div>
+        {/* Key metrics bar */}
+        {(data.experience.length > 0 || data.skills.technical.length > 0) && (
+          <div style={{ display: 'flex', gap: '28px', marginTop: '18px', paddingTop: '14px', borderTop: `1px solid ${t.accent}60` }}>
+            {data.experience.length > 0 && (
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '20px', fontWeight: 700, color: t.accent }}>{data.experience.length}+</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Roles</p>
+              </div>
+            )}
+            {data.skills.technical.length > 0 && (
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '20px', fontWeight: 700, color: t.accent }}>{data.skills.technical.length + data.skills.languages.length}</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Tech Skills</p>
+              </div>
+            )}
+            {data.projects.length > 0 && (
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '20px', fontWeight: 700, color: t.accent }}>{data.projects.length}</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Projects</p>
+              </div>
+            )}
+            {data.certifications.length > 0 && (
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '20px', fontWeight: 700, color: t.accent }}>{data.certifications.length}</p>
+                <p style={{ fontSize: '10px', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Certs</p>
               </div>
             )}
           </div>
+        )}
+      </div>
 
-          <button onClick={reset}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 11px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#64748b', fontFamily: 'inherit' }}>
-            <RefreshCw size={12} /> New
-          </button>
+      <div style={{ padding: '28px 44px' }}>
+        {/* Summary */}
+        {data.summary && (
+          <section style={{ marginBottom: '24px', borderLeft: `4px solid ${t.accent}`, paddingLeft: '16px' }}>
+            <p style={{ fontSize: '13.5px', lineHeight: 1.8, color: '#333', fontStyle: 'italic' }}>{data.summary}</p>
+          </section>
+        )}
 
-          {hasResume && (
-            <button onClick={handleDownload} disabled={isDownloading}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 16px', border: 'none', borderRadius: 8, background: 'linear-gradient(135deg,#1d4ed8,#7c3aed)', color: 'white', cursor: isDownloading ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', boxShadow: '0 2px 10px rgba(29,78,216,.35)' }}>
-              {isDownloading ? <Loader2 size={13} className="spin" /> : <Download size={13} />}
-              {isDownloading ? 'Generating…' : `Download ${resumeData.documentType === 'cv' ? 'CV' : 'PDF'}`}
-            </button>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px' }}>
+          <div>
+            {/* Experience */}
+            {data.experience.length > 0 && (
+              <section style={{ marginBottom: '24px' }}>
+                <h2 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: t.accent, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ display: 'inline-block', width: '24px', height: '1px', background: t.accent }} />
+                  Career History
+                </h2>
+                {data.experience.map((exp, i) => (
+                  <div key={i} style={{ marginBottom: '18px' }}>
+                    <p style={{ fontWeight: 700, fontSize: '13.5px', color: '#111' }}>{exp.role}</p>
+                    <p style={{ fontSize: '12.5px', color: t.accent, fontWeight: 600, marginBottom: '2px' }}>{exp.company}</p>
+                    <p style={{ fontSize: '11px', color: '#888', marginBottom: '7px' }}>{exp.duration} · {exp.location}</p>
+                    <ul style={{ paddingLeft: '16px' }}>
+                      {exp.bullets.map((b, j) => (
+                        <li key={j} style={{ fontSize: '12px', lineHeight: 1.65, color: '#444', marginBottom: '3px' }}>{b}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </section>
+            )}
+
+            {/* Achievements */}
+            {data.achievements.length > 0 && (
+              <section>
+                <h2 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: t.accent, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ display: 'inline-block', width: '24px', height: '1px', background: t.accent }} />
+                  Achievements
+                </h2>
+                <ul style={{ paddingLeft: '16px' }}>
+                  {data.achievements.map((a, i) => (
+                    <li key={i} style={{ fontSize: '12.5px', color: '#333', marginBottom: '5px' }}>{a}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+
+          <div>
+            {/* Education */}
+            {data.education.length > 0 && (
+              <section style={{ marginBottom: '24px' }}>
+                <h2 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: t.accent, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ display: 'inline-block', width: '24px', height: '1px', background: t.accent }} />
+                  Education
+                </h2>
+                {data.education.map((edu, i) => (
+                  <div key={i} style={{ marginBottom: '12px', padding: '10px', background: '#f9fafb', borderRadius: '4px' }}>
+                    <p style={{ fontWeight: 700, fontSize: '13px' }}>{edu.degree}</p>
+                    <p style={{ fontSize: '12px', color: t.accent }}>{edu.institution}</p>
+                    <p style={{ fontSize: '11px', color: '#888' }}>{edu.year} {edu.score && `· ${edu.score}`}</p>
+                  </div>
+                ))}
+              </section>
+            )}
+
+            {/* Skills */}
+            <section style={{ marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: t.accent, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ display: 'inline-block', width: '24px', height: '1px', background: t.accent }} />
+                Core Competencies
+              </h2>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                {[...data.skills.languages, ...data.skills.technical, ...data.skills.tools].map((s, i) => (
+                  <span key={i} style={{ fontSize: '11px', padding: '3px 9px', background: '#f1f5f9', borderRadius: '3px', color: '#334155' }}>{s}</span>
+                ))}
+              </div>
+            </section>
+
+            {/* Projects */}
+            {data.projects.length > 0 && (
+              <section style={{ marginBottom: '24px' }}>
+                <h2 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: t.accent, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ display: 'inline-block', width: '24px', height: '1px', background: t.accent }} />
+                  Key Projects
+                </h2>
+                {data.projects.map((p, i) => (
+                  <div key={i} style={{ marginBottom: '10px' }}>
+                    <p style={{ fontWeight: 700, fontSize: '12.5px' }}>{p.name}</p>
+                    <p style={{ fontSize: '11.5px', color: '#666' }}>{p.description}</p>
+                    {p.impact && <p style={{ fontSize: '11.5px', color: t.accent, fontStyle: 'italic' }}>▲ {p.impact}</p>}
+                  </div>
+                ))}
+              </section>
+            )}
+
+            {/* Certifications */}
+            {data.certifications.length > 0 && (
+              <section>
+                <h2 style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: t.accent, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ display: 'inline-block', width: '24px', height: '1px', background: t.accent }} />
+                  Certifications
+                </h2>
+                {data.certifications.map((c, i) => (
+                  <div key={i} style={{ marginBottom: '7px' }}>
+                    <p style={{ fontSize: '12.5px', fontWeight: 600 }}>{c.name}</p>
+                    <p style={{ fontSize: '11px', color: '#888' }}>{c.issuer} · {c.year}</p>
+                  </div>
+                ))}
+              </section>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CreativeTemplate({ data, theme }: { data: ResumeData; theme: Theme }) {
+  const t = theme
+  const allSkills = [...data.skills.languages, ...data.skills.technical]
+  const skillLevels = [90, 85, 88, 78, 92, 80, 75, 86]
+  return (
+    <div id="resume-preview-content" style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", background: '#fff', minHeight: '1122px' }}>
+      {/* Gradient Header */}
+      <div style={{ background: `linear-gradient(135deg, ${t.primary} 0%, ${t.accent} 100%)`, color: '#fff', padding: '36px 44px 28px', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '200px', height: '200px', borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }} />
+        <div style={{ position: 'absolute', bottom: '-40px', left: '30%', width: '140px', height: '140px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <h1 style={{ fontSize: '32px', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: '6px' }}>{data.name || 'Your Name'}</h1>
+          <p style={{ fontSize: '15px', opacity: 0.9, marginBottom: '14px', fontWeight: 500 }}>{data.headline || 'Creative Professional'}</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', fontSize: '12px', opacity: 0.85 }}>
+            {data.email && <span style={{ background: 'rgba(255,255,255,0.15)', padding: '4px 10px', borderRadius: '20px' }}>✉ {data.email}</span>}
+            {data.phone && <span style={{ background: 'rgba(255,255,255,0.15)', padding: '4px 10px', borderRadius: '20px' }}>📞 {data.phone}</span>}
+            {data.location && <span style={{ background: 'rgba(255,255,255,0.15)', padding: '4px 10px', borderRadius: '20px' }}>📍 {data.location}</span>}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '0', minHeight: 'calc(1122px - 140px)' }}>
+        {/* Main */}
+        <div style={{ padding: '28px 32px' }}>
+          {data.summary && (
+            <section style={{ marginBottom: '24px', padding: '16px', background: `${t.bg}`, borderRadius: '8px', borderLeft: `4px solid ${t.accent}` }}>
+              <p style={{ fontSize: '13px', lineHeight: 1.8, color: '#333' }}>{data.summary}</p>
+            </section>
           )}
+
+          {data.experience.length > 0 && (
+            <section style={{ marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Briefcase size={14} style={{ color: t.accent }} /> Experience
+              </h2>
+              {data.experience.map((exp, i) => (
+                <div key={i} style={{ marginBottom: '18px', position: 'relative', paddingLeft: '16px' }}>
+                  <div style={{ position: 'absolute', left: 0, top: '6px', width: '6px', height: '6px', borderRadius: '50%', background: t.accent }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <p style={{ fontWeight: 700, fontSize: '14px' }}>{exp.role}</p>
+                      <p style={{ fontSize: '12.5px', color: t.accent, fontWeight: 600 }}>{exp.company}</p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '11px', color: '#888', background: '#f1f5f9', padding: '2px 8px', borderRadius: '10px' }}>{exp.duration}</span>
+                    </div>
+                  </div>
+                  <ul style={{ marginTop: '7px', paddingLeft: '16px' }}>
+                    {exp.bullets.map((b, j) => (
+                      <li key={j} style={{ fontSize: '12px', lineHeight: 1.7, color: '#4b5563', marginBottom: '3px' }}>{b}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </section>
+          )}
+
+          {/* Project cards */}
+          {data.projects.length > 0 && (
+            <section style={{ marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FolderGit2 size={14} style={{ color: t.accent }} /> Projects
+              </h2>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                {data.projects.map((p, i) => (
+                  <div key={i} style={{ padding: '14px', border: `1px solid ${t.accent}30`, borderRadius: '8px', background: '#fafafa' }}>
+                    <p style={{ fontWeight: 700, fontSize: '13px', color: t.primary, marginBottom: '4px' }}>{p.name}</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginBottom: '7px' }}>
+                      {p.tech.split(',').slice(0, 3).map((tech, j) => (
+                        <span key={j} style={{ fontSize: '10px', background: `${t.accent}20`, color: t.primary, padding: '2px 6px', borderRadius: '4px' }}>{tech.trim()}</span>
+                      ))}
+                    </div>
+                    <p style={{ fontSize: '11.5px', color: '#555' }}>{p.description}</p>
+                    {p.impact && <p style={{ fontSize: '11px', color: t.accent, marginTop: '5px', fontWeight: 600 }}>📈 {p.impact}</p>}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {data.education.length > 0 && (
+            <section>
+              <h2 style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <GraduationCap size={14} style={{ color: t.accent }} /> Education
+              </h2>
+              {data.education.map((edu, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < data.education.length - 1 ? '1px dashed #e5e7eb' : 'none' }}>
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: '13.5px' }}>{edu.degree}</p>
+                    <p style={{ fontSize: '12px', color: '#666' }}>{edu.institution}</p>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ fontSize: '12px', color: t.accent, fontWeight: 600 }}>{edu.year}</p>
+                    {edu.score && <p style={{ fontSize: '11px', color: '#888' }}>{edu.score}</p>}
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+        </div>
+
+        {/* Right sidebar */}
+        <div style={{ background: '#f8fafc', borderLeft: '1px solid #e5e7eb', padding: '28px 22px' }}>
+          {/* Skill bars */}
+          {allSkills.length > 0 && (
+            <section style={{ marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, marginBottom: '14px' }}>Technical Skills</h2>
+              {allSkills.slice(0, 8).map((s, i) => (
+                <div key={i} style={{ marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#334155' }}>{s}</span>
+                    <span style={{ fontSize: '10px', color: t.accent }}>{skillLevels[i % skillLevels.length]}%</span>
+                  </div>
+                  <div style={{ height: '4px', background: '#e2e8f0', borderRadius: '2px' }}>
+                    <div style={{ height: '100%', width: `${skillLevels[i % skillLevels.length]}%`, background: `linear-gradient(90deg, ${t.primary}, ${t.accent})`, borderRadius: '2px' }} />
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+
+          {/* Tools */}
+          {data.skills.tools.length > 0 && (
+            <section style={{ marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, marginBottom: '12px' }}>Tools</h2>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                {data.skills.tools.map((s, i) => (
+                  <span key={i} style={{ fontSize: '11px', background: '#fff', border: `1px solid ${t.accent}40`, color: t.primary, padding: '3px 8px', borderRadius: '4px' }}>{s}</span>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Soft skills */}
+          {data.skills.soft.length > 0 && (
+            <section style={{ marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, marginBottom: '10px' }}>Soft Skills</h2>
+              {data.skills.soft.map((s, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: t.accent, flexShrink: 0 }} />
+                  <span style={{ fontSize: '12px', color: '#334155' }}>{s}</span>
+                </div>
+              ))}
+            </section>
+          )}
+
+          {/* Certifications */}
+          {data.certifications.length > 0 && (
+            <section style={{ marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, marginBottom: '12px' }}>Certifications</h2>
+              {data.certifications.map((c, i) => (
+                <div key={i} style={{ marginBottom: '10px', padding: '8px', background: '#fff', borderRadius: '6px', border: `1px solid ${t.accent}30` }}>
+                  <p style={{ fontSize: '11.5px', fontWeight: 700, color: t.primary }}>{c.name}</p>
+                  <p style={{ fontSize: '11px', color: '#888' }}>{c.issuer} · {c.year}</p>
+                </div>
+              ))}
+            </section>
+          )}
+
+          {/* Achievements */}
+          {data.achievements.length > 0 && (
+            <section>
+              <h2 style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: t.primary, marginBottom: '12px' }}>Achievements</h2>
+              {data.achievements.map((a, i) => (
+                <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                  <Star size={12} style={{ color: t.accent, flexShrink: 0, marginTop: '3px' }} />
+                  <p style={{ fontSize: '11.5px', color: '#374151' }}>{a}</p>
+                </div>
+              ))}
+            </section>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Page ─────────────────────────────────────────────────────────────────
+
+export default function ResumeBuilderPage() {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [resumeData, setResumeData] = useState<ResumeData>(EMPTY_RESUME)
+  const [hasResume, setHasResume] = useState(false)
+  const [template, setTemplate] = useState<TemplateId>('classic')
+  const [theme, setTheme] = useState<Theme>(THEMES[0])
+  const [showThemes, setShowThemes] = useState(false)
+  const [mobileTab, setMobileTab] = useState<'chat' | 'preview'>('chat')
+  const [flowStep, setFlowStep] = useState<FlowStep>('greet')
+  const [userInfo, setUserInfo] = useState<Record<string, string>>({})
+
+  const chatEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // ── Auto-scroll ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, isLoading])
+
+  // ── Greet on mount ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    const greet = async () => {
+      try {
+        // Try to load Supabase profile
+        let profileName = ''
+        try {
+          const { createClient } = await import('@/lib/supabase/client')
+          const supabase = createClient()
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('full_name, email, phone, city, state')
+              .eq('id', user.id)
+              .single()
+            if (profile) {
+              profileName = profile.full_name || ''
+              setUserInfo(prev => ({
+                ...prev,
+                name: profile.full_name || '',
+                email: profile.email || user.email || '',
+                phone: profile.phone || '',
+                location: [profile.city, profile.state].filter(Boolean).join(', ')
+              }))
+            }
+          }
+        } catch {
+          // Supabase not configured or user not logged in — continue without it
+        }
+
+        const greeting = profileName
+          ? `Hey ${profileName.split(' ')[0]}! 👋 I'm your AI Resume Coach. Ready to build you a job-winning resume? What role are you targeting?`
+          : `Hey there! 👋 I'm your AI Resume Coach — let's build you a resume that gets callbacks. What's your full name?`
+
+        addAssistantMessage(greeting)
+        setFlowStep(profileName ? 'role' : 'name')
+      } catch {
+        addAssistantMessage(`Hey there! 👋 I'm your AI Resume Coach. Let's build a resume that gets you hired. What's your full name?`)
+        setFlowStep('name')
+      }
+    }
+    greet()
+  }, [])
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  const addAssistantMessage = useCallback((content: string) => {
+    setMessages(prev => [...prev, {
+      id: Math.random().toString(36).slice(2),
+      role: 'assistant',
+      content,
+      ts: Date.now()
+    }])
+  }, [])
+
+  const addUserMessage = useCallback((content: string) => {
+    setMessages(prev => [...prev, {
+      id: Math.random().toString(36).slice(2),
+      role: 'user',
+      content,
+      ts: Date.now()
+    }])
+  }, [])
+
+  // ── Build resume ─────────────────────────────────────────────────────────────
+  const buildResume = useCallback(async (info: Record<string, string>) => {
+    setIsLoading(true)
+    addAssistantMessage('✨ Building your resume now — this takes about 10 seconds...')
+    try {
+      const result = await buildResumeJSON(info)
+      setResumeData(result)
+      setHasResume(true)
+      setFlowStep('done')
+      if (window.innerWidth >= 768) {
+        // On desktop, stay on chat tab
+      } else {
+        setMobileTab('preview')
+      }
+      addAssistantMessage(`🎉 Your resume is ready, ${result.name.split(' ')[0] || 'there'}! Check it out on the right. You can tell me: "make summary stronger", "change theme to gold", "tailor for Google", or "add Docker to skills".`)
+      toast.success('Resume built! Download it as PDF below.')
+    } catch (err) {
+      addAssistantMessage("Hmm, something went wrong building your resume. Let me try once more — just say 'rebuild' or 'build my resume'.")
+      toast.error('Failed to generate resume. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [addAssistantMessage])
+
+  // ── Question flow ────────────────────────────────────────────────────────────
+  const handleFlowStep = useCallback(async (userText: string, step: FlowStep) => {
+    const lower = userText.toLowerCase().trim()
+
+    // Global shortcuts
+    if (lower.includes('auto fill') || lower.includes('fill it yourself') || lower.includes('autofill')) {
+      const info = { role: userInfo.role || userText.replace(/auto.?fill/i, '').trim() || 'Software Engineer', ...userInfo }
+      await buildResume(info)
+      return
+    }
+    if (lower.match(/^(just build|build resume|build it|build my resume|generate)/)) {
+      const roleMatch = lower.match(/for (.+)$/)
+      const info = { ...userInfo, role: roleMatch ? roleMatch[1] : (userInfo.role || 'Software Developer') }
+      await buildResume(info)
+      return
+    }
+
+    // Post-build commands
+    if (step === 'done' && hasResume) {
+      await handlePostBuildCommand(userText)
+      return
+    }
+
+    // Flow steps
+    switch (step) {
+      case 'name':
+        setUserInfo(prev => ({ ...prev, name: userText }))
+        setFlowStep('role')
+        addAssistantMessage(`Nice to meet you, ${userText.split(' ')[0]}! 🎯 What role are you targeting? (e.g. React Developer, Data Analyst, Product Manager)`)
+        break
+
+      case 'role':
+        setUserInfo(prev => ({ ...prev, role: userText }))
+        setFlowStep('experience')
+        addAssistantMessage(`Great choice! How many years of experience do you have? (Type 0 if you're a fresher)`)
+        break
+
+      case 'experience':
+        setUserInfo(prev => ({ ...prev, experience: userText }))
+        setFlowStep('education')
+        addAssistantMessage(`Got it. What's your highest education? (e.g. B.Tech Computer Science, NSIT, 2023, 8.4 CGPA)`)
+        break
+
+      case 'education':
+        setUserInfo(prev => ({ ...prev, education: userText }))
+        setFlowStep('skills')
+        addAssistantMessage(`Perfect! List your top skills, comma-separated. (e.g. React, Node.js, Python, AWS)`)
+        break
+
+      case 'skills':
+        setUserInfo(prev => ({ ...prev, skills: userText }))
+        setFlowStep('work')
+        addAssistantMessage(`Nice skills! Any work experience to mention? (e.g. TCS, Backend Dev, 2 years — or type "fresher" to skip)`)
+        break
+
+      case 'work':
+        setUserInfo(prev => ({ ...prev, work: userText }))
+        setFlowStep('projects')
+        addAssistantMessage(`Any projects to highlight? (e.g. E-commerce site using React + Node, or type "skip")`)
+        break
+
+      case 'projects':
+        setUserInfo(prev => ({ ...prev, projects: userText }))
+        setFlowStep('location')
+        addAssistantMessage(`Almost there! What's your current city and state? (e.g. Bangalore, Karnataka)`)
+        break
+
+      case 'location':
+        setUserInfo(prev => ({ ...prev, location: userText }))
+        setFlowStep('contact')
+        addAssistantMessage(`Last thing — your email and phone number? (e.g. john@gmail.com, 9876543210)`)
+        break
+
+      case 'contact':
+        setUserInfo(prev => ({ ...prev, contact: userText }))
+        setFlowStep('confirm')
+        addAssistantMessage(`All set! Ready to build your resume? Just say "yes" and I'll create it in seconds. 🚀`)
+        break
+
+      case 'confirm':
+        if (lower.match(/yes|yep|sure|go|build|do it|ready|ok|okay|yeah|yup|create|make/)) {
+          await buildResume({ ...userInfo, contact: userText !== lower ? userText : userInfo.contact })
+        } else {
+          addAssistantMessage(`Alright, just say "yes" when you're ready to build, or let me know what you'd like to change!`)
+        }
+        break
+
+      default:
+        // If no step matched, check if it's a build command
+        if (lower.match(/build|create|generate|make|yes|go/)) {
+          await buildResume(userInfo)
+        } else {
+          addAssistantMessage(`I'm not sure I caught that. You can continue answering the questions, or say "build my resume" to skip ahead!`)
+        }
+    }
+  }, [userInfo, hasResume, buildResume, addAssistantMessage])
+
+  // ── Post-build AI commands ───────────────────────────────────────────────────
+  const handlePostBuildCommand = useCallback(async (userText: string) => {
+    const lower = userText.toLowerCase()
+    setIsLoading(true)
+
+    try {
+      // Theme change
+      const themeMatch = lower.match(/change theme to (.+)|theme (.+)|use (.+) theme/)
+      if (themeMatch) {
+        const themeName = (themeMatch[1] || themeMatch[2] || themeMatch[3]).trim()
+        const found = THEMES.find(t => t.label.toLowerCase().includes(themeName) || themeName.includes(t.id))
+        if (found) {
+          setTheme(found)
+          addAssistantMessage(`Done! Switched to the ${found.label} theme. ✨`)
+        } else {
+          addAssistantMessage(`Available themes: Navy, Forest, Rose, Gold, Onyx. Which one?`)
+        }
+        setIsLoading(false)
+        return
+      }
+
+      // Template change
+      const templateMatch = lower.match(/switch to (.+) template|use (.+) template|change template to (.+)/)
+      if (templateMatch) {
+        const tName = (templateMatch[1] || templateMatch[2] || templateMatch[3]).trim().toLowerCase()
+        const found = TEMPLATES.find(t => t.id.includes(tName) || tName.includes(t.id) || t.label.toLowerCase().includes(tName))
+        if (found) {
+          setTemplate(found.id)
+          addAssistantMessage(`Switched to the ${found.label} template! 🎨`)
+        } else {
+          addAssistantMessage(`Available templates: Classic, Modern, Minimal, Executive, Creative. Which one?`)
+        }
+        setIsLoading(false)
+        return
+      }
+
+      // AI-powered improvements
+      let updatePrompt = ''
+      let updateField = ''
+
+      if (lower.includes('stronger summary') || lower.includes('improve summary') || lower.includes('make summary')) {
+        updatePrompt = `Rewrite this professional summary to be more powerful, ATS-optimized, and tailored for a ${resumeData.headline} role. Current summary: "${resumeData.summary}". Return ONLY the new summary text, no quotes, no explanation.`
+        updateField = 'summary'
+      } else if (lower.includes('bullet points') || lower.includes('improve bullets') || lower.includes('rewrite bullets')) {
+        updatePrompt = `Improve all these work experience bullet points to be stronger, more quantified, and use better action verbs. Current data: ${JSON.stringify(resumeData.experience)}. Return ONLY a JSON array of experience objects with the same structure but improved bullets. No markdown, no text before/after.`
+        updateField = 'experience'
+      } else if (lower.match(/add (.+) to skills/)) {
+        const skill = lower.match(/add (.+) to skills/)![1]
+        setResumeData(prev => ({
+          ...prev,
+          skills: {
+            ...prev.skills,
+            tools: [...prev.skills.tools, ...skill.split(',').map(s => s.trim())]
+          }
+        }))
+        addAssistantMessage(`Added ${skill} to your skills! 💪`)
+        setIsLoading(false)
+        return
+      } else if (lower.includes('tailor for') || lower.includes('optimize for')) {
+        const company = lower.replace(/tailor for|optimize for/g, '').trim()
+        updatePrompt = `Rewrite this resume to be tailored for a position at ${company}. Current data: ${JSON.stringify({ summary: resumeData.summary, experience: resumeData.experience, skills: resumeData.skills })}. Return ONLY a JSON with updated summary (string), experience (array), skills (object). Same structure. No markdown.`
+        updateField = 'tailor'
+      } else if (lower.includes('ats') || lower.includes('ats friendly') || lower.includes('optimize keywords')) {
+        updatePrompt = `Make this resume more ATS-friendly by improving keywords for a ${resumeData.headline} role. Current: ${JSON.stringify({ summary: resumeData.summary, skills: resumeData.skills, experience: resumeData.experience })}. Return ONLY JSON with updated summary, skills, experience fields. No markdown.`
+        updateField = 'tailor'
+      } else if (lower.includes('add certification') || lower.includes('add cert')) {
+        const certName = lower.replace(/add certification|add cert/g, '').trim()
+        setResumeData(prev => ({
+          ...prev,
+          certifications: [...prev.certifications, { name: certName, issuer: 'Self-verified', year: '2024', url: '' }]
+        }))
+        addAssistantMessage(`Added ${certName} to your certifications! 🏆`)
+        setIsLoading(false)
+        return
+      } else {
+        // Generic AI instruction
+        updatePrompt = `The user wants to update their resume with this instruction: "${userText}". Current resume data: ${JSON.stringify(resumeData)}. Apply the requested change and return the COMPLETE updated resume JSON with all fields. Return ONLY raw JSON, no markdown, no explanation.`
+        updateField = 'full'
+      }
+
+      if (updatePrompt) {
+        const response = await callAI(updatePrompt, 'Return only raw valid JSON or plain text as instructed. No markdown. No backticks. No explanation.')
+        const cleaned = response.replace(/```json|```/g, '').trim()
+
+        if (updateField === 'summary') {
+          setResumeData(prev => ({ ...prev, summary: cleaned }))
+          addAssistantMessage(`Done! Your summary is now more powerful and ATS-optimized. ✅`)
+        } else if (updateField === 'experience') {
+          const updated = JSON.parse(cleaned)
+          setResumeData(prev => ({ ...prev, experience: Array.isArray(updated) ? updated : prev.experience }))
+          addAssistantMessage(`Bullet points upgraded with stronger action verbs and metrics! 📈`)
+        } else if (updateField === 'tailor') {
+          const updated = JSON.parse(cleaned)
+          setResumeData(prev => ({
+            ...prev,
+            summary: updated.summary || prev.summary,
+            experience: updated.experience || prev.experience,
+            skills: updated.skills || prev.skills
+          }))
+          addAssistantMessage(`Resume tailored and optimized! The keywords and framing are now aligned. 🎯`)
+        } else if (updateField === 'full') {
+          const updated = JSON.parse(cleaned)
+          setResumeData(updated)
+          addAssistantMessage(`Done! I've updated your resume as requested. Check the preview! 👀`)
+        }
+      }
+    } catch {
+      addAssistantMessage(`Hmm, something went wrong with that update. Try a more specific instruction like "make summary stronger" or "improve bullet points".`)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [resumeData, addAssistantMessage])
+
+  // ── Send message ─────────────────────────────────────────────────────────────
+  const handleSend = useCallback(async () => {
+    const text = input.trim()
+    if (!text || isLoading) return
+
+    setInput('')
+    addUserMessage(text)
+
+    await handleFlowStep(text, flowStep)
+  }, [input, isLoading, flowStep, handleFlowStep, addUserMessage])
+
+  // ── PDF download ─────────────────────────────────────────────────────────────
+  const downloadPDF = useCallback(() => {
+    const previewEl = document.getElementById('resume-preview-content')
+    if (!previewEl) { toast.error('Build your resume first!'); return }
+
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) { toast.error('Please allow popups to download PDF'); return }
+
+    const styles = Array.from(document.styleSheets)
+      .map(sheet => {
+        try {
+          return Array.from(sheet.cssRules).map(rule => rule.cssText).join('\n')
+        } catch { return '' }
+      }).join('\n')
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${resumeData.name || 'Resume'} - Resume</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: white; }
+    @page { size: A4; margin: 0; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+    ${styles}
+  </style>
+</head>
+<body>
+  ${previewEl.outerHTML}
+  <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() { window.print(); window.close(); }, 500);
+    });
+  <\/script>
+</body>
+</html>`)
+    printWindow.document.close()
+    toast.success('📄 PDF dialog opening — save as PDF!')
+  }, [resumeData.name])
+
+  // ── Current template renderer ────────────────────────────────────────────────
+  const renderTemplate = () => {
+    const props = { data: resumeData, theme }
+    switch (template) {
+      case 'classic': return <ClassicTemplate {...props} />
+      case 'modern': return <ModernTemplate {...props} />
+      case 'minimal': return <MinimalTemplate {...props} />
+      case 'executive': return <ExecutiveTemplate {...props} />
+      case 'creative': return <CreativeTemplate {...props} />
+    }
+  }
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
+  return (
+    <div className="flex flex-col h-screen bg-gray-950 text-gray-100 overflow-hidden">
+
+      {/* ── Top Bar ── */}
+      <header className="flex items-center justify-between px-4 md:px-6 py-3 bg-gray-900 border-b border-gray-800 shrink-0 z-10">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+            <Sparkles size={16} className="text-white" />
+          </div>
+          <div>
+            <h1 className="font-bold text-sm text-white leading-tight">AI Resume Studio</h1>
+            <p className="text-xs text-gray-400 hidden md:block">by LYU — Career Platform for India</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Theme picker */}
+          <div className="relative">
+            <button
+              onClick={() => setShowThemes(!showThemes)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition text-xs text-gray-300"
+            >
+              <Palette size={14} />
+              <span className="hidden sm:inline">{theme.label}</span>
+            </button>
+            <AnimatePresence>
+              {showThemes && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="absolute right-0 top-9 bg-gray-800 border border-gray-700 rounded-xl p-2 flex gap-2 shadow-2xl z-50"
+                >
+                  {THEMES.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => { setTheme(t); setShowThemes(false) }}
+                      className="flex flex-col items-center gap-1 px-2 py-1 rounded-lg hover:bg-gray-700 transition"
+                    >
+                      <div className="w-6 h-6 rounded-full border-2 border-white/20" style={{ background: t.primary }} />
+                      <span className="text-xs text-gray-300 whitespace-nowrap">{t.label}</span>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Download button */}
+          <button
+            onClick={downloadPDF}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 transition text-white text-sm font-medium"
+          >
+            <Download size={14} />
+            <span>PDF</span>
+          </button>
         </div>
       </header>
 
-      {/* ── BODY ── */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      {/* ── Mobile Tab Switcher ── */}
+      <div className="md:hidden flex border-b border-gray-800 bg-gray-900 shrink-0">
+        <button
+          onClick={() => setMobileTab('chat')}
+          className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-2 transition ${mobileTab === 'chat' ? 'text-indigo-400 border-b-2 border-indigo-500' : 'text-gray-500'}`}
+        >
+          <Bot size={16} /> Chat
+        </button>
+        <button
+          onClick={() => setMobileTab('preview')}
+          className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-2 transition ${mobileTab === 'preview' ? 'text-indigo-400 border-b-2 border-indigo-500' : 'text-gray-500'}`}
+        >
+          <FileText size={16} /> Preview {hasResume && <span className="w-2 h-2 rounded-full bg-green-500" />}
+        </button>
+      </div>
 
-        {/* CHAT */}
-        <div style={{ width: activeView === 'preview' ? 0 : 400, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'white', borderRight: '1px solid #e8edf2', overflow: 'hidden', transition: 'width 0.2s' }}>
+      {/* ── Main Layout ── */}
+      <div className="flex flex-1 min-h-0">
 
+        {/* ── Left: Chat Panel ── */}
+        <div className={`
+          ${mobileTab === 'chat' ? 'flex' : 'hidden'} md:flex
+          flex-col w-full md:w-[380px] md:min-w-[380px] md:max-w-[380px]
+          border-r border-gray-800 bg-gray-900
+        `}>
           {/* Messages */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px 8px', display: 'flex', flexDirection: 'column', gap: 10, background: '#fafbfc' }}>
-            {messages.map((m, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 7 }}>
-                {m.role === 'ai' && (
-                  <div style={{ width: 27, height: 27, borderRadius: '50%', background: 'linear-gradient(135deg,#1d4ed8,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Sparkles size={12} color="white" />
+          <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ scrollBehavior: 'smooth' }}>
+            <AnimatePresence initial={false}>
+              {messages.map(msg => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className={`flex gap-2.5 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                >
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                    msg.role === 'assistant'
+                      ? 'bg-gradient-to-br from-indigo-500 to-purple-600'
+                      : 'bg-gray-700'
+                  }`}>
+                    {msg.role === 'assistant' ? <Bot size={14} className="text-white" /> : <User size={14} className="text-gray-300" />}
                   </div>
-                )}
-                <div style={{
-                  maxWidth: '83%', padding: '10px 14px',
-                  borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '4px 16px 16px 16px',
-                  background: m.role === 'user' ? 'linear-gradient(135deg,#1d4ed8,#7c3aed)' : 'white',
-                  color: m.role === 'user' ? 'white' : '#1e293b',
-                  fontSize: 13, lineHeight: 1.6,
-                  border: m.role === 'ai' ? '1px solid #e8edf2' : 'none',
-                  boxShadow: m.role === 'ai' ? '0 1px 4px rgba(0,0,0,.05)' : '0 2px 10px rgba(29,78,216,.22)',
-                  whiteSpace: 'pre-wrap'
-                }}>{m.text}</div>
-              </div>
-            ))}
-            {loading && (
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 7 }}>
-                <div style={{ width: 27, height: 27, borderRadius: '50%', background: 'linear-gradient(135deg,#1d4ed8,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Loader2 size={12} color="white" style={{ animation: 'spin 1s linear infinite' }} />
+                  <div className={`max-w-[82%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                    msg.role === 'assistant'
+                      ? 'bg-gray-800 text-gray-100 rounded-tl-sm'
+                      : 'bg-indigo-600 text-white rounded-tr-sm'
+                  }`}>
+                    {msg.content}
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+
+            {/* Typing indicator */}
+            {isLoading && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex gap-2.5"
+              >
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
+                  <Bot size={14} className="text-white" />
                 </div>
-                <div style={{ background: 'white', border: '1px solid #e8edf2', borderRadius: '4px 16px 16px 16px', padding: '12px 16px', display: 'flex', gap: 5, boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
-                  {[0,1,2].map(d => <div key={d} style={{ width: 7, height: 7, borderRadius: '50%', background: '#1d4ed8', animation: `bounce 1.2s ease-in-out ${d*0.2}s infinite` }} />)}
+                <div className="bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-3">
+                  <TypingDots />
                 </div>
-              </div>
+              </motion.div>
             )}
             <div ref={chatEndRef} />
           </div>
 
-          {/* Quick prompts — first message only */}
-          {messages.length === 1 && !loading && (
-            <div style={{ padding: '0 12px 10px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {quickPrompts.map((q, i) => (
-                <button key={i} onClick={() => send(q)}
-                  style={{ padding: '5px 12px', border: '1px solid #c7d2fe', borderRadius: 20, background: '#eef2ff', color: '#3730a3', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {q}
+          {/* Quick hints */}
+          {flowStep === 'done' && (
+            <div className="px-3 pb-2 flex flex-wrap gap-1.5">
+              {[
+                'Make summary stronger',
+                'Improve bullet points',
+                'Make it ATS friendly',
+                'Modern template',
+              ].map(hint => (
+                <button
+                  key={hint}
+                  onClick={() => {
+                    setInput(hint)
+                    inputRef.current?.focus()
+                  }}
+                  className="text-xs px-2.5 py-1 rounded-full bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200 transition border border-gray-700"
+                >
+                  {hint}
                 </button>
               ))}
             </div>
           )}
 
-          {/* Build hint */}
-          {questionCount >= 3 && !hasResume && !loading && (
-            <div style={{ padding: '7px 14px', background: '#f0fdf4', borderTop: '1px solid #bbf7d0' }}>
-              <p style={{ fontSize: 11.5, color: '#15803d', fontWeight: 600, margin: 0 }}>
-                💡 Say <strong>"build it"</strong> or <strong>"you choose everything"</strong> to generate now
-              </p>
-            </div>
-          )}
-
-          {/* Input */}
-          <div style={{ padding: '10px 12px 12px', borderTop: '1px solid #f1f5f9', background: 'white' }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '8px 8px 8px 14px' }}>
+          {/* Input area */}
+          <div className="p-3 border-t border-gray-800">
+            <div className="flex gap-2 items-end">
               <textarea
-                ref={textareaRef}
+                ref={inputRef}
                 value={input}
-                onChange={e => {
-                  setInput(e.target.value)
-                  e.target.style.height = 'auto'
-                  e.target.style.height = Math.min(e.target.scrollHeight, 110) + 'px'
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSend()
+                  }
                 }}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                placeholder="Tell me about yourself…"
+                placeholder={
+                  flowStep === 'done'
+                    ? 'Ask me to improve anything...'
+                    : 'Type your answer...'
+                }
                 rows={1}
-                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: '#0f172a', resize: 'none', fontFamily: 'inherit', lineHeight: 1.55, maxHeight: 110 }}
+                className="flex-1 bg-gray-800 text-gray-100 placeholder-gray-500 rounded-xl px-4 py-2.5 text-sm resize-none border border-gray-700 focus:outline-none focus:border-indigo-500 transition"
+                style={{ minHeight: '42px', maxHeight: '120px' }}
               />
-              <button onClick={() => send()} disabled={!input.trim() || loading}
-                style={{ width: 34, height: 34, borderRadius: 8, border: 'none', background: input.trim() && !loading ? 'linear-gradient(135deg,#1d4ed8,#7c3aed)' : '#e2e8f0', color: input.trim() && !loading ? 'white' : '#94a3b8', cursor: input.trim() && !loading ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: input.trim() && !loading ? '0 2px 8px rgba(29,78,216,.28)' : 'none', transition: 'all 0.15s' }}>
-                <ChevronRight size={16} />
+              <button
+                onClick={handleSend}
+                disabled={isLoading || !input.trim()}
+                className="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition shrink-0"
+              >
+                {isLoading ? <Loader2 size={16} className="text-white animate-spin" /> : <Send size={16} className="text-white" />}
               </button>
             </div>
+            <p className="text-xs text-gray-600 mt-1.5 text-center">
+              Tip: say <span className="text-indigo-400">"auto fill"</span> to skip questions
+            </p>
           </div>
         </div>
 
-        {/* PREVIEW */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 20, background: '#dde3ea' }}>
-          {!hasResume ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 18, textAlign: 'center', padding: 32 }}>
-              <div style={{ width: 68, height: 68, borderRadius: 20, background: 'rgba(29,78,216,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <FileText size={30} color="#1d4ed8" style={{ opacity: 0.45 }} />
-              </div>
-              <div>
-                <p style={{ color: '#1e293b', fontSize: 17, fontWeight: 700, margin: '0 0 7px' }}>Resume preview will appear here</p>
-                <p style={{ color: '#94a3b8', fontSize: 13, margin: 0 }}>Chat with Aria on the left, or click a quick-start below</p>
-              </div>
-              {/* Template preview tiles */}
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-                {TEMPLATES.map(t => (
-                  <button key={t.id} onClick={() => setTemplate(t)}
-                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: template.id === t.id ? `2px solid #1d4ed8` : '2px solid transparent', borderRadius: 10, padding: 6, cursor: 'pointer' }}>
-                    <div style={{ width: 54, height: 38, borderRadius: 7, background: t.preview }} />
-                    <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{t.name}</span>
-                  </button>
-                ))}
-              </div>
-              <button onClick={() => setActiveView('chat')}
-                style={{ background: 'linear-gradient(135deg,#1d4ed8,#7c3aed)', color: 'white', border: 'none', borderRadius: 10, padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 14px rgba(29,78,216,.3)' }}>
-                Start chatting →
-              </button>
-            </div>
-          ) : (
-            <div style={{ maxWidth: 740, margin: '0 auto' }}>
-              {/* Toolbar */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {/* ← BACK BUTTON */}
-                  <button onClick={() => setActiveView('chat')}
-                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: 8, background: 'white', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#374151', fontFamily: 'inherit', boxShadow: '0 1px 3px rgba(0,0,0,.07)' }}>
-                    <ArrowLeft size={13} /> Back to Chat
-                  </button>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 9, height: 9, borderRadius: '50%', background: '#22c55e' }} />
-                    <span style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>
-                      {resumeData.documentType === 'cv' ? 'CV' : 'Resume'} ready · {template.name} template
-                    </span>
-                  </div>
+        {/* ── Right: Preview Panel ── */}
+        <div className={`
+          ${mobileTab === 'preview' ? 'flex' : 'hidden'} md:flex
+          flex-col flex-1 bg-gray-950 min-h-0
+        `}>
+          {/* Template switcher */}
+          <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-800 bg-gray-900 shrink-0 overflow-x-auto">
+            <span className="text-xs text-gray-500 mr-1 whitespace-nowrap shrink-0">Template:</span>
+            {TEMPLATES.map(t => {
+              const Icon = t.icon
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTemplate(t.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap shrink-0 ${
+                    template === t.id
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                  }`}
+                >
+                  <Icon size={12} />
+                  {t.label}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Resume preview */}
+          <div className="flex-1 overflow-auto p-4 md:p-6">
+            {hasResume ? (
+              <motion.div
+                key={`${template}-${theme.id}`}
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+                className="bg-white rounded-lg shadow-2xl overflow-hidden max-w-[794px] mx-auto"
+              >
+                {renderTemplate()}
+              </motion.div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center gap-6 py-16">
+                <div className="w-20 h-20 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-center">
+                  <FileText size={36} className="text-gray-600" />
                 </div>
-                <button onClick={handleDownload} disabled={isDownloading}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 18px', border: 'none', borderRadius: 8, background: 'linear-gradient(135deg,#1d4ed8,#7c3aed)', color: 'white', cursor: isDownloading ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', boxShadow: '0 2px 10px rgba(29,78,216,.3)' }}>
-                  {isDownloading ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={13} />}
-                  {isDownloading ? 'Generating PDF…' : 'Download PDF'}
+                <div>
+                  <h2 className="text-xl font-bold text-gray-300 mb-2">Your Resume Preview</h2>
+                  <p className="text-gray-500 text-sm max-w-xs">Answer the questions in the chat, or say <strong className="text-indigo-400">"auto fill"</strong> to let AI build everything for you instantly.</p>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-md">
+                  {[
+                    { icon: Zap, text: 'ATS Optimized', color: 'text-yellow-400' },
+                    { icon: Award, text: 'Action Verbs', color: 'text-green-400' },
+                    { icon: Star, text: '5 Templates', color: 'text-purple-400' },
+                    { icon: Code2, text: 'Indian Context', color: 'text-blue-400' },
+                    { icon: Download, text: 'PDF Export', color: 'text-red-400' },
+                    { icon: RefreshCw, text: 'AI Edits', color: 'text-indigo-400' },
+                  ].map(({ icon: Icon, text, color }) => (
+                    <div key={text} className="flex items-center gap-2 p-3 bg-gray-900 border border-gray-800 rounded-xl text-sm text-gray-400">
+                      <Icon size={16} className={color} />
+                      {text}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Template previews */}
+                <div className="flex gap-2 flex-wrap justify-center mt-2">
+                  {TEMPLATES.map(t => {
+                    const Icon = t.icon
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setTemplate(t.id)}
+                        className={`flex flex-col items-center gap-1 px-4 py-3 rounded-xl border transition ${
+                          template === t.id
+                            ? 'bg-indigo-600 border-indigo-500 text-white'
+                            : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'
+                        }`}
+                      >
+                        <Icon size={20} />
+                        <span className="text-xs font-medium">{t.label}</span>
+                        <span className="text-xs opacity-60">{t.desc}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom action bar */}
+          {hasResume && (
+            <div className="border-t border-gray-800 bg-gray-900 px-4 py-3 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-xs text-gray-400">Resume ready · {resumeData.experience.length} exp · {resumeData.skills.technical.length + resumeData.skills.languages.length} skills</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setResumeData(EMPTY_RESUME)
+                    setHasResume(false)
+                    setFlowStep('name')
+                    setUserInfo({})
+                    setMessages([])
+                    addAssistantMessage(`Let's start fresh! 🔄 What's your full name?`)
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 text-xs transition"
+                >
+                  <RefreshCw size={12} />
+                  Rebuild
+                </button>
+                <button
+                  onClick={downloadPDF}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition"
+                >
+                  <Download size={14} />
+                  Download PDF
                 </button>
               </div>
-
-              <ResumePreview data={resumeData} template={template} />
-
-              <p style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', marginTop: 12 }}>
-                PDF opens in new tab · Allow pop-ups if nothing happens
-              </p>
             </div>
           )}
         </div>
       </div>
-
-      <style>{`
-        @keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
-        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-        .spin{animation:spin 1s linear infinite}
-        ::-webkit-scrollbar{width:5px}
-        ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:5px}
-        textarea{scrollbar-width:none}
-        textarea::-webkit-scrollbar{display:none}
-        button{transition:opacity .15s}
-        button:hover{opacity:.88}
-        @media(max-width:768px){
-          header>div:last-child{gap:3px!important}
-        }
-      `}</style>
     </div>
   )
 }
