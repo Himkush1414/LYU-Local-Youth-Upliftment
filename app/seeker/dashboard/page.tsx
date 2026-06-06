@@ -1,635 +1,555 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { motion, useInView, animate } from 'framer-motion'
+import { motion, useInView, animate, AnimatePresence } from 'framer-motion'
 import {
   Briefcase, Calendar, Eye, Bookmark, Sparkles, ArrowUpRight,
   ArrowDownRight, ChevronRight, MapPin, IndianRupee, Clock,
-  CheckCircle2, Circle, Video, Bell, Send, Heart, MessageSquare,
-  TrendingUp, User, Star, Zap, Target, Award
+  CheckCircle2, Circle, Bell, TrendingUp, Star, Zap, Target,
+  Award, MessageSquare, Heart, Send, User, BarChart2, FileText
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const C = {
+  bg: '#0a0a0f',
+  card: '#111118',
+  cardHover: '#16161f',
+  border: '#1e1e2e',
+  borderHover: '#2e2e4e',
+  purple: '#6c63ff',
+  purpleDim: 'rgba(108,99,255,0.12)',
+  purpleGlow: 'rgba(108,99,255,0.25)',
+  cyan: '#06b6d4',
+  cyanDim: 'rgba(6,182,212,0.12)',
+  green: '#10b981',
+  greenDim: 'rgba(16,185,129,0.12)',
+  amber: '#f59e0b',
+  amberDim: 'rgba(245,158,11,0.12)',
+  red: '#ef4444',
+  redDim: 'rgba(239,68,68,0.12)',
+  text: '#f8fafc',
+  textSub: '#94a3b8',
+  textMuted: '#475569',
+  radius: '16px',
+  radiusSm: '10px',
+}
 
-interface Profile {
-  full_name: string | null
-  avatar_url: string | null
-  headline: string | null
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface Profile { full_name: string | null; avatar_url: string | null; headline: string | null }
+
+interface StatCard {
+  label: string; value: number; trend: number; icon: React.ElementType
+  color: string; dimColor: string; prefix?: string; suffix?: string
 }
 
 interface Application {
-  id: string
-  company: string
-  role: string
-  location: string
-  appliedDate: string
-  status: 'Applied' | 'In Review' | 'Interview' | 'Rejected' | 'Offer'
-  initials: string
-  color: string
+  id: string; company: string; role: string; location: string
+  appliedDate: string; status: 'Applied' | 'In Review' | 'Interview' | 'Rejected' | 'Offer'
+  initials: string; color: string
 }
 
 interface Job {
-  id: string
-  title: string
-  company: string
-  location: string
-  salaryMin: number
-  salaryMax: number
-  match: number
-  tags: string[]
-  initials: string
-  color: string
+  id: string; title: string; company: string; location: string
+  salary: string; match: number; tags: string[]; type: string; initials: string; color: string
 }
 
 interface Interview {
-  id: string
-  company: string
-  role: string
-  date: string
-  time: string
-  type: string
+  id: string; company: string; role: string; date: string; time: string; type: string
 }
 
-interface ActivityItem {
-  id: string
-  type: 'applied' | 'saved' | 'viewed' | 'message'
-  text: string
-  time: string
-  icon: 'send' | 'bookmark' | 'eye' | 'message'
+interface Activity {
+  id: string; type: 'applied' | 'saved' | 'viewed' | 'message' | 'interview'
+  text: string; time: string; icon: React.ElementType; color: string
 }
 
-// ─── Mock Data ──────────────────────────────────────────────────────────────
-
-const APPLICATIONS: Application[] = [
-  { id: '1', company: 'Infosys', role: 'Senior Frontend Developer', location: 'Bengaluru', appliedDate: '2 Jun 2025', status: 'Interview', initials: 'IN', color: '#006f9f' },
-  { id: '2', company: 'Razorpay', role: 'Product Designer', location: 'Bengaluru', appliedDate: '30 May 2025', status: 'In Review', initials: 'RP', color: '#3395FF' },
-  { id: '3', company: 'Swiggy', role: 'React Native Engineer', location: 'Hyderabad', appliedDate: '28 May 2025', status: 'Applied', initials: 'SW', color: '#FC8019' },
-  { id: '4', company: 'HDFC Bank', role: 'UI/UX Designer', location: 'Mumbai', appliedDate: '25 May 2025', status: 'Rejected', initials: 'HB', color: '#004C8F' },
-  { id: '5', company: 'Meesho', role: 'Full Stack Developer', location: 'Bengaluru', appliedDate: '22 May 2025', status: 'Offer', initials: 'ME', color: '#9b59b6' },
+// ─── Mock data ────────────────────────────────────────────────────────────────
+const MOCK_APPLICATIONS: Application[] = [
+  { id: '1', company: 'Razorpay', role: 'Frontend Engineer', location: 'Bangalore', appliedDate: '2 days ago', status: 'In Review', initials: 'RZ', color: '#0ea5e9' },
+  { id: '2', company: 'Swiggy', role: 'Software Engineer II', location: 'Bangalore', appliedDate: '4 days ago', status: 'Interview', initials: 'SW', color: '#f97316' },
+  { id: '3', company: 'CRED', role: 'Product Engineer', location: 'Bangalore', appliedDate: '1 week ago', status: 'Applied', initials: 'CR', color: '#8b5cf6' },
+  { id: '4', company: 'PhonePe', role: 'React Developer', location: 'Pune', appliedDate: '1 week ago', status: 'Rejected', initials: 'PP', color: '#6366f1' },
+  { id: '5', company: 'Zepto', role: 'Full Stack Developer', location: 'Mumbai', appliedDate: '2 weeks ago', status: 'Offer', initials: 'ZP', color: '#10b981' },
 ]
 
-const RECOMMENDED_JOBS: Job[] = [
-  { id: '1', title: 'Senior React Developer', company: 'Zomato', location: 'Gurugram', salaryMin: 18, salaryMax: 28, match: 96, tags: ['Hybrid', 'Full-time', 'React'], initials: 'ZO', color: '#E23744' },
-  { id: '2', title: 'Frontend Engineer', company: 'PhonePe', location: 'Bengaluru', salaryMin: 22, salaryMax: 35, match: 91, tags: ['Remote', 'Full-time', 'TypeScript'], initials: 'PP', color: '#5f259f' },
-  { id: '3', title: 'UI Engineer L3', company: 'Flipkart', location: 'Bengaluru', salaryMin: 25, salaryMax: 40, match: 88, tags: ['On-site', 'Full-time', 'Next.js'], initials: 'FK', color: '#2874F0' },
+const MOCK_JOBS: Job[] = [
+  { id: '1', title: 'Senior React Developer', company: 'Groww', location: 'Bangalore', salary: '18–25 LPA', match: 96, tags: ['React', 'TypeScript', 'Redux'], type: 'Full-time', initials: 'GR', color: '#10b981' },
+  { id: '2', title: 'Product Engineer', company: 'Meesho', location: 'Bangalore', salary: '15–22 LPA', match: 89, tags: ['Node.js', 'React', 'AWS'], type: 'Full-time', initials: 'MS', color: '#f43f5e' },
+  { id: '3', title: 'Frontend Engineer', company: 'Zomato', location: 'Gurugram', salary: '12–18 LPA', match: 83, tags: ['Vue.js', 'Python', 'Docker'], type: 'Hybrid', initials: 'ZM', color: '#ef4444' },
+]
+
+const MOCK_INTERVIEWS: Interview[] = [
+  { id: '1', company: 'Swiggy', role: 'Software Engineer II', date: 'Tomorrow', time: '11:00 AM', type: 'Video Call' },
+  { id: '2', company: 'Razorpay', role: 'Frontend Engineer', date: 'Jun 10', time: '3:00 PM', type: 'Technical Round' },
+]
+
+const MOCK_ACTIVITY: Activity[] = [
+  { id: '1', type: 'interview', text: 'Interview scheduled with Swiggy for Software Engineer II', time: '1 hour ago', icon: Calendar, color: C.cyan },
+  { id: '2', type: 'message', text: 'New message from Razorpay HR — "We loved your profile!"', time: '3 hours ago', icon: MessageSquare, color: C.purple },
+  { id: '3', type: 'applied', text: 'Applied to Product Engineer at CRED', time: 'Yesterday', icon: Send, color: C.green },
+  { id: '4', type: 'saved', text: 'Saved Senior Frontend role at Flipkart', time: 'Yesterday', icon: Heart, color: C.amber },
+  { id: '5', type: 'viewed', text: 'Recruiter from Zepto viewed your profile', time: '2 days ago', icon: Eye, color: '#a855f7' },
 ]
 
 const PROFILE_ITEMS = [
-  { label: 'Work Experience', done: true },
-  { label: 'Education Details', done: true },
-  { label: 'Skills & Expertise', done: true },
-  { label: 'Resume Upload', done: false },
-  { label: 'Portfolio Link', done: false },
-  { label: 'Profile Photo', done: false },
+  { label: 'Profile photo', done: true },
+  { label: 'Work experience', done: true },
+  { label: 'Education details', done: true },
+  { label: 'Skills & tools', done: false },
+  { label: 'Resume uploaded', done: false },
+  { label: 'LinkedIn profile', done: false },
 ]
 
-const INTERVIEWS: Interview[] = [
-  { id: '1', company: 'Infosys', role: 'Senior Frontend Developer', date: 'Today', time: '3:00 PM', type: 'Technical Round 2' },
-  { id: '2', company: 'Razorpay', role: 'Product Designer', date: 'Tomorrow', time: '11:30 AM', type: 'Culture Fit' },
-]
-
-const ACTIVITY: ActivityItem[] = [
-  { id: '1', type: 'applied', text: 'Applied to Senior React Developer at Zomato', time: '2 hours ago', icon: 'send' },
-  { id: '2', type: 'viewed', text: 'Your profile was viewed by a recruiter from Amazon', time: '5 hours ago', icon: 'eye' },
-  { id: '3', type: 'saved', text: 'Saved Frontend Engineer role at Google India', time: 'Yesterday', icon: 'bookmark' },
-  { id: '4', type: 'message', text: 'New message from HR at Wipro Technologies', time: 'Yesterday', icon: 'message' },
-  { id: '5', type: 'applied', text: 'Application viewed by Razorpay hiring team', time: '2 days ago', icon: 'eye' },
-]
-
-// ─── Status Config ──────────────────────────────────────────────────────────
-
-const STATUS_CONFIG = {
-  Applied: { bg: 'rgba(108,99,255,0.15)', text: '#a89dff', dot: '#6c63ff' },
-  'In Review': { bg: 'rgba(6,182,212,0.15)', text: '#67e8f9', dot: '#06b6d4' },
-  Interview: { bg: 'rgba(16,185,129,0.15)', text: '#6ee7b7', dot: '#10b981' },
-  Rejected: { bg: 'rgba(239,68,68,0.15)', text: '#fca5a5', dot: '#ef4444' },
-  Offer: { bg: 'rgba(245,158,11,0.15)', text: '#fcd34d', dot: '#f59e0b' },
-}
-
-const ACTIVITY_ICON_CONFIG = {
-  send: { Icon: Send, bg: 'rgba(108,99,255,0.2)', color: '#a89dff' },
-  bookmark: { Icon: Bookmark, bg: 'rgba(245,158,11,0.2)', color: '#fcd34d' },
-  eye: { Icon: Eye, bg: 'rgba(6,182,212,0.2)', color: '#67e8f9' },
-  message: { Icon: MessageSquare, bg: 'rgba(16,185,129,0.2)', color: '#6ee7b7' },
-}
-
-// ─── Sub-components ─────────────────────────────────────────────────────────
-
-function AnimatedNumber({ target, duration = 1.2 }: { target: number; duration?: number }) {
-  const [val, setVal] = useState(0)
+// ─── Animated counter ─────────────────────────────────────────────────────────
+function CountUp({ to, duration = 1.5 }: { to: number; duration?: number }) {
   const ref = useRef<HTMLSpanElement>(null)
   const inView = useInView(ref, { once: true })
-
   useEffect(() => {
-    if (!inView) return
-    const controls = animate(0, target, {
+    if (!inView || !ref.current) return
+    const controls = animate(0, to, {
       duration,
-      ease: [0.25, 0.46, 0.45, 0.94],
-      onUpdate: (v) => setVal(Math.round(v)),
+      onUpdate: v => { if (ref.current) ref.current.textContent = Math.round(v).toString() }
     })
-    return () => controls.stop()
-  }, [inView, target, duration])
-
-  return <span ref={ref}>{val}</span>
+    return controls.stop
+  }, [inView, to, duration])
+  return <span ref={ref}>0</span>
 }
 
-function Skeleton({ className = '' }: { className?: string }) {
+// ─── Status badge ─────────────────────────────────────────────────────────────
+function StatusBadge({ status }: { status: Application['status'] }) {
+  const map: Record<Application['status'], { color: string; bg: string }> = {
+    'Applied':   { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' },
+    'In Review': { color: C.amber,   bg: C.amberDim },
+    'Interview': { color: C.cyan,    bg: C.cyanDim },
+    'Rejected':  { color: C.red,     bg: C.redDim },
+    'Offer':     { color: C.green,   bg: C.greenDim },
+  }
+  const s = map[status]
   return (
-    <div
-      className={`rounded-xl animate-pulse ${className}`}
-      style={{ background: 'linear-gradient(90deg, #1a1a28 25%, #22223a 50%, #1a1a28 75%)', backgroundSize: '200% 100%' }}
-    />
+    <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px', color: s.color, background: s.bg, letterSpacing: '0.02em' }}>
+      {status}
+    </span>
   )
 }
 
-function CircularProgress({ percent }: { percent: number }) {
-  const radius = 52
-  const circumference = 2 * Math.PI * radius
-  const strokeDashoffset = circumference - (percent / 100) * circumference
-
+// ─── Card wrapper ─────────────────────────────────────────────────────────────
+function Card({ children, style = {}, onClick }: { children: React.ReactNode; style?: React.CSSProperties; onClick?: () => void }) {
+  const [hovered, setHovered] = useState(false)
   return (
-    <div className="relative flex items-center justify-center" style={{ width: 128, height: 128 }}>
-      <svg width="128" height="128" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx="64" cy="64" r={radius} fill="none" stroke="#1e1e2e" strokeWidth="10" />
-        <motion.circle
-          cx="64" cy="64" r={radius}
-          fill="none"
-          stroke="url(#progressGrad)"
-          strokeWidth="10"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          initial={{ strokeDashoffset: circumference }}
-          animate={{ strokeDashoffset }}
-          transition={{ duration: 1.4, ease: 'easeOut', delay: 0.3 }}
-        />
-        <defs>
-          <linearGradient id="progressGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#6c63ff" />
-            <stop offset="100%" stopColor="#06b6d4" />
-          </linearGradient>
-        </defs>
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span style={{ fontSize: 26, fontWeight: 700, color: '#f8fafc', lineHeight: 1 }}>{percent}%</span>
-        <span style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>Complete</span>
-      </div>
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: C.card,
+        border: `1px solid ${hovered ? C.borderHover : C.border}`,
+        borderRadius: C.radius,
+        transition: 'all 0.2s ease',
+        cursor: onClick ? 'pointer' : 'default',
+        ...style,
+      }}
+    >
+      {children}
     </div>
   )
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// ─── Section header ───────────────────────────────────────────────────────────
+function SectionHeader({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+      <h2 style={{ fontSize: '15px', fontWeight: 700, color: C.text, margin: 0 }}>{title}</h2>
+      {action && (
+        <button onClick={onAction} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.purple, fontSize: '12.5px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', padding: 0 }}>
+          {action} <ChevronRight size={14} />
+        </button>
+      )}
+    </div>
+  )
+}
 
+// ─── Circular progress ────────────────────────────────────────────────────────
+function CircularProgress({ pct }: { pct: number }) {
+  const r = 44, cx = 52, cy = 52, stroke = 6
+  const circ = 2 * Math.PI * r
+  const dash = (pct / 100) * circ
+  return (
+    <svg width="104" height="104" viewBox="0 0 104 104">
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={C.border} strokeWidth={stroke} />
+      <motion.circle
+        cx={cx} cy={cy} r={r} fill="none"
+        stroke={C.purple} strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={`${dash} ${circ - dash}`}
+        strokeDashoffset={circ / 4}
+        initial={{ strokeDasharray: `0 ${circ}` }}
+        animate={{ strokeDasharray: `${dash} ${circ - dash}` }}
+        transition={{ duration: 1.2, ease: 'easeOut' }}
+      />
+      <text x={cx} y={cy + 2} textAnchor="middle" dominantBaseline="middle" fill={C.text} fontSize="18" fontWeight="700">{pct}%</text>
+    </svg>
+  )
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter()
-  const supabase = createClient()
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const [profile, setProfile] = useState<Profile>({ full_name: null, avatar_url: null, headline: null })
   const [loading, setLoading] = useState(true)
 
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const firstName = profile.full_name?.split(' ')[0] || 'there'
+
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+
+  const profileDone = PROFILE_ITEMS.filter(i => i.done).length
+  const profilePct = Math.round((profileDone / PROFILE_ITEMS.length) * 100)
+
+  const STATS: StatCard[] = [
+    { label: 'Jobs Applied', value: 24, trend: 12, icon: Briefcase, color: C.purple, dimColor: C.purpleDim },
+    { label: 'Interviews', value: 3, trend: 50, icon: Calendar, color: C.cyan, dimColor: C.cyanDim },
+    { label: 'Profile Views', value: 187, trend: 23, icon: Eye, color: C.green, dimColor: C.greenDim },
+    { label: 'Saved Jobs', value: 12, trend: -5, icon: Bookmark, color: C.amber, dimColor: C.amberDim },
+  ]
+
   useEffect(() => {
-    async function load() {
+    const load = async () => {
       try {
+        const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-          const { data } = await supabase
-            .from('profiles')
-            .select('full_name, avatar_url, headline')
-            .eq('id', user.id)
-            .single()
-          setProfile(data)
+          const { data } = await supabase.from('profiles').select('full_name,avatar_url,headline').eq('id', user.id).single()
+          if (data) setProfile(data)
         }
-      } catch {
-        // silently fail — dashboard still renders with mock data
-      } finally {
-        setLoading(false)
-      }
+      } catch { /* use defaults */ }
+      finally { setLoading(false) }
     }
     load()
   }, [])
 
-  const firstName = profile?.full_name?.split(' ')[0] ?? 'there'
-
-  const now = new Date()
-  const hour = now.getHours()
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
-  const dateStr = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-
-  const profilePercent = Math.round((PROFILE_ITEMS.filter(i => i.done).length / PROFILE_ITEMS.length) * 100)
-
-  const STATS = [
-    { label: 'Jobs Applied', value: 24, trend: '+3 this week', up: true, icon: Briefcase, color: '#6c63ff', glow: 'rgba(108,99,255,0.25)' },
-    { label: 'Interviews', value: 3, trend: '+1 this week', up: true, icon: Calendar, color: '#06b6d4', glow: 'rgba(6,182,212,0.25)' },
-    { label: 'Profile Views', value: 187, trend: '+12% vs last week', up: true, icon: Eye, color: '#10b981', glow: 'rgba(16,185,129,0.25)' },
-    { label: 'Saved Jobs', value: 11, trend: '-2 this week', up: false, icon: Bookmark, color: '#f59e0b', glow: 'rgba(245,158,11,0.25)' },
-  ]
-
-  const cardBase: React.CSSProperties = {
-    background: '#111118',
-    border: '1px solid #1e1e2e',
-    borderRadius: 16,
-    transition: 'all 0.2s ease',
-  }
-
-  // ── Loading Skeleton ─────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="w-full min-h-full p-6 space-y-6" style={{ background: '#0a0a0f' }}>
-        <Skeleton className="h-32 w-full" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32" />)}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-          <div className="lg:col-span-3 space-y-4">
-            <Skeleton className="h-64" />
-            <Skeleton className="h-56" />
-          </div>
-          <div className="lg:col-span-2 space-y-4">
-            <Skeleton className="h-48" />
-            <Skeleton className="h-40" />
-            <Skeleton className="h-32" />
-          </div>
-        </div>
-        <Skeleton className="h-48" />
-      </div>
-    )
-  }
+  if (loading) return (
+    <div style={{ padding: '32px', background: C.bg, minHeight: '100%' }}>
+      {[1,2,3,4].map(i => (
+        <div key={i} style={{ height: '80px', borderRadius: C.radius, background: C.card, marginBottom: '16px', animation: 'pulse 1.5s ease-in-out infinite' }} />
+      ))}
+    </div>
+  )
 
   return (
-    <div className="w-full min-h-full p-4 md:p-6 space-y-5" style={{ background: '#0a0a0f', color: '#f8fafc', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={{ padding: '28px 32px', background: C.bg, minHeight: '100%', maxWidth: '1400px' }}>
 
-      {/* ── Welcome Banner ───────────────────────────────────────────────── */}
+      {/* ── Welcome banner ── */}
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45 }}
+        transition={{ duration: 0.4 }}
         style={{
-          ...cardBase,
-          background: 'linear-gradient(135deg, rgba(108,99,255,0.12) 0%, rgba(6,182,212,0.08) 50%, #111118 100%)',
-          borderColor: 'rgba(108,99,255,0.3)',
-          padding: '24px 28px',
-          position: 'relative',
-          overflow: 'hidden',
+          borderRadius: C.radius,
+          padding: '28px 32px',
+          marginBottom: '28px',
+          background: 'linear-gradient(135deg, rgba(108,99,255,0.15) 0%, rgba(6,182,212,0.08) 100%)',
+          border: `1px solid ${C.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '16px',
         }}
       >
-        <div style={{ position: 'absolute', top: -40, right: -40, width: 160, height: 160, background: 'rgba(108,99,255,0.08)', borderRadius: '50%', filter: 'blur(40px)' }} />
-        <div style={{ position: 'absolute', bottom: -20, right: 120, width: 100, height: 100, background: 'rgba(6,182,212,0.06)', borderRadius: '50%', filter: 'blur(30px)' }} />
-
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 relative z-10">
-          <div>
-            <h1 style={{ fontSize: 26, fontWeight: 700, color: '#f8fafc', marginBottom: 6, lineHeight: 1.2 }}>
-              {greeting}, {firstName}! 👋
-            </h1>
-            <p style={{ color: '#94a3b8', fontSize: 14 }}>
-              Here's what's happening with your job search today.
-            </p>
-          </div>
-          <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: '8px 16px', border: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-            <p style={{ color: '#94a3b8', fontSize: 11, marginBottom: 2 }}>TODAY</p>
-            <p style={{ color: '#f8fafc', fontSize: 13, fontWeight: 600 }}>{dateStr}</p>
-          </div>
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: 800, color: C.text, margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+            {greeting}, {firstName}! 👋
+          </h1>
+          <p style={{ fontSize: '14px', color: C.textSub, margin: 0 }}>
+            Here's what's happening with your job search today.
+          </p>
+          <p style={{ fontSize: '12px', color: C.textMuted, margin: '4px 0 0' }}>{today}</p>
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={() => router.push('/seeker/opportunities')}
+            style={{ padding: '10px 20px', borderRadius: C.radiusSm, background: C.purple, border: 'none', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Zap size={14} /> Browse Jobs
+          </button>
+          <button
+            onClick={() => router.push('/seeker/resume')}
+            style={{ padding: '10px 20px', borderRadius: C.radiusSm, background: 'transparent', border: `1px solid ${C.border}`, color: C.text, fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <FileText size={14} /> Update Resume
+          </button>
         </div>
       </motion.div>
 
-      {/* ── Stats Row ────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {STATS.map((stat, i) => {
-          const Icon = stat.icon
+      {/* ── Stats row ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
+        {STATS.map((s, i) => {
+          const Icon = s.icon
+          const up = s.trend > 0
           return (
             <motion.div
-              key={stat.label}
+              key={s.label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.1 + i * 0.07 }}
-              style={{
-                ...cardBase,
-                padding: '20px',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                cursor: 'default',
-                position: 'relative',
-                overflow: 'hidden',
-              }}
-              whileHover={{ boxShadow: `0 0 24px ${stat.glow}`, borderColor: stat.color + '55', y: -2 }}
+              transition={{ duration: 0.4, delay: i * 0.08 }}
             >
-              <div style={{ position: 'absolute', top: -24, right: -24, width: 80, height: 80, background: stat.glow, borderRadius: '50%', filter: 'blur(20px)' }} />
-              <div className="flex items-start justify-between mb-3">
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: stat.glow, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon size={18} color={stat.color} />
+              <Card style={{ padding: '22px', backdropFilter: 'blur(12px)' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: s.dimColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon size={18} color={s.color} />
+                  </div>
+                  <span style={{ fontSize: '11.5px', fontWeight: 600, color: up ? C.green : C.red, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                    {up ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
+                    {Math.abs(s.trend)}%
+                  </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: stat.up ? '#10b981' : '#ef4444', fontWeight: 600 }}>
-                  {stat.up ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
+                <div style={{ fontSize: '32px', fontWeight: 800, color: C.text, letterSpacing: '-0.03em', lineHeight: 1 }}>
+                  {s.prefix}<CountUp to={s.value} />{s.suffix}
                 </div>
-              </div>
-              <div style={{ fontSize: 30, fontWeight: 800, color: '#f8fafc', lineHeight: 1, marginBottom: 4 }}>
-                <AnimatedNumber target={stat.value} />
-              </div>
-              <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>{stat.label}</div>
-              <div style={{ fontSize: 11, color: stat.up ? '#10b981' : '#ef4444', marginTop: 4, fontWeight: 600 }}>{stat.trend}</div>
+                <div style={{ fontSize: '12.5px', color: C.textSub, marginTop: '6px' }}>{s.label}</div>
+                <div style={{ fontSize: '11px', color: C.textMuted, marginTop: '3px' }}>vs last week</div>
+              </Card>
             </motion.div>
           )
         })}
       </div>
 
-      {/* ── Two-Column Layout ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+      {/* ── Main two-column ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '20px', alignItems: 'start' }}>
 
-        {/* LEFT COLUMN */}
-        <div className="lg:col-span-3 space-y-5">
+        {/* LEFT */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
           {/* Recent Applications */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.45, delay: 0.25 }}
-            style={{ ...cardBase, padding: '20px 24px' }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>Recent Applications</h2>
-              <button
-                onClick={() => router.push('/seeker/applications')}
-                style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#6c63ff', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 8, transition: 'all 0.2s' }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(108,99,255,0.1)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              >
-                View All <ChevronRight size={14} />
-              </button>
-            </div>
-            <div className="space-y-1">
-              {APPLICATIONS.map((app, i) => (
-                <motion.div
-                  key={app.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.3 + i * 0.05 }}
-                  onClick={() => toast('Opening application details — coming soon!')}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, cursor: 'pointer', transition: 'all 0.2s' }}
-                  whileHover={{ background: 'rgba(255,255,255,0.04)' }}
-                >
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: app.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${app.color}44` }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: app.color }}>{app.initials}</span>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{app.role}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>
-                      <span>{app.company}</span>
-                      <span style={{ color: '#2d2d44' }}>•</span>
-                      <MapPin size={10} />
-                      <span>{app.location}</span>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+            <Card style={{ padding: '24px' }}>
+              <SectionHeader title="Recent Applications" action="View All" onAction={() => router.push('/seeker/applications')} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {MOCK_APPLICATIONS.map((app, i) => (
+                  <motion.div
+                    key={app.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.35 + i * 0.06 }}
+                    onClick={() => toast.info('Opening application details — coming soon!')}
+                    style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px', borderRadius: C.radiusSm, cursor: 'pointer', transition: 'background 0.15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = C.cardHover)}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: app.color + '22', border: `1px solid ${app.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: app.color, flexShrink: 0 }}>
+                      {app.initials}
                     </div>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0, display: 'none' }} className="sm:block">{app.appliedDate}</div>
-                  <div style={{
-                    flexShrink: 0,
-                    padding: '3px 10px',
-                    borderRadius: 20,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    background: STATUS_CONFIG[app.status].bg,
-                    color: STATUS_CONFIG[app.status].text,
-                    display: 'flex', alignItems: 'center', gap: 5,
-                  }}>
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: STATUS_CONFIG[app.status].dot }} />
-                    {app.status}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '13.5px', fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{app.role}</div>
+                      <div style={{ fontSize: '12px', color: C.textSub, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                        {app.company}
+                        <span style={{ color: C.textMuted }}>·</span>
+                        <MapPin size={11} color={C.textMuted} />
+                        <span style={{ color: C.textMuted }}>{app.location}</span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <StatusBadge status={app.status} />
+                      <div style={{ fontSize: '11px', color: C.textMuted, marginTop: '4px' }}>{app.appliedDate}</div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </Card>
           </motion.div>
 
           {/* Recommended Jobs */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.45, delay: 0.35 }}
-            style={{ ...cardBase, padding: '20px 24px' }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>Recommended Jobs</h2>
-              <button
-                onClick={() => router.push('/seeker/opportunities')}
-                style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#6c63ff', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', borderRadius: 8, transition: 'all 0.2s' }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(108,99,255,0.1)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              >
-                View All <ChevronRight size={14} />
-              </button>
-            </div>
-            <div className="space-y-3">
-              {RECOMMENDED_JOBS.map((job, i) => (
-                <motion.div
-                  key={job.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 + i * 0.07 }}
-                  style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid #1e1e2e', borderRadius: 12, padding: '14px 16px', transition: 'all 0.2s' }}
-                  whileHover={{ borderColor: '#2d2d44', background: 'rgba(255,255,255,0.04)' }}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: job.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${job.color}44` }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: job.color }}>{job.initials}</span>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+            <Card style={{ padding: '24px' }}>
+              <SectionHeader title="Recommended for You" action="Browse All" onAction={() => router.push('/seeker/opportunities')} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {MOCK_JOBS.map((job, i) => (
+                  <motion.div
+                    key={job.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.45 + i * 0.07 }}
+                    style={{ padding: '16px', borderRadius: C.radiusSm, border: `1px solid ${C.border}`, background: 'transparent', transition: 'all 0.2s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = C.cardHover; (e.currentTarget as HTMLDivElement).style.borderColor = C.borderHover }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent'; (e.currentTarget as HTMLDivElement).style.borderColor = C.border }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: job.color + '22', border: `1px solid ${job.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: job.color, flexShrink: 0 }}>
+                        {job.initials}
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{job.title}</div>
-                        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <span>{job.company}</span>
-                          <span style={{ color: '#2d2d44' }}>•</span>
-                          <MapPin size={10} />
-                          <span>{job.location}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 700, color: C.text }}>{job.title}</span>
+                          <span style={{ fontSize: '11.5px', fontWeight: 700, color: job.match >= 90 ? C.green : C.amber, background: job.match >= 90 ? C.greenDim : C.amberDim, padding: '2px 8px', borderRadius: '20px' }}>
+                            {job.match}% match
+                          </span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, color: '#10b981', fontWeight: 600 }}>
-                            <IndianRupee size={11} />
-                            {job.salaryMin}–{job.salaryMax} LPA
+                        <div style={{ fontSize: '12.5px', color: C.textSub, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                          {job.company}
+                          <span style={{ color: C.textMuted }}>·</span>
+                          <MapPin size={11} color={C.textMuted} />
+                          {job.location}
+                          <span style={{ color: C.textMuted }}>·</span>
+                          <IndianRupee size={11} color={C.textMuted} />
+                          {job.salary}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {job.tags.map(t => (
+                              <span key={t} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: C.purpleDim, color: C.purple, fontWeight: 500 }}>{t}</span>
+                            ))}
+                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: C.cyanDim, color: C.cyan, fontWeight: 500 }}>{job.type}</span>
                           </div>
-                          {job.tags.map(tag => (
-                            <span key={tag} style={{ fontSize: 10, color: '#94a3b8', background: 'rgba(255,255,255,0.06)', borderRadius: 6, padding: '2px 8px', border: '1px solid #1e1e2e' }}>{tag}</span>
-                          ))}
+                          <button
+                            onClick={() => toast.info('Redirecting to application — coming soon!')}
+                            style={{ padding: '6px 14px', borderRadius: '8px', background: C.purple, border: 'none', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >
+                            Apply Now
+                          </button>
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <div style={{ background: 'rgba(16,185,129,0.15)', color: '#6ee7b7', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 8 }}>
-                        <Target size={10} style={{ display: 'inline', marginRight: 3 }} />
-                        {job.match}% match
+                  </motion.div>
+                ))}
+              </div>
+            </Card>
+          </motion.div>
+
+          {/* Activity Feed */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+            <Card style={{ padding: '24px' }}>
+              <SectionHeader title="Recent Activity" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                {MOCK_ACTIVITY.map((act, i) => {
+                  const Icon = act.icon
+                  return (
+                    <div key={act.id} style={{ display: 'flex', gap: '14px', padding: '12px 0', borderBottom: i < MOCK_ACTIVITY.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                      <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: act.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' }}>
+                        <Icon size={15} color={act.color} />
                       </div>
-                      <button
-                        onClick={() => toast('Redirecting to application — coming soon!')}
-                        style={{ fontSize: 12, fontWeight: 700, color: '#f8fafc', background: 'linear-gradient(135deg, #6c63ff, #4f46e5)', border: 'none', borderRadius: 10, padding: '7px 14px', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 0 16px rgba(108,99,255,0.4)' }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none' }}
-                      >
-                        Apply Now
-                      </button>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: '13px', color: C.text, margin: '0 0 3px', lineHeight: 1.5 }}>{act.text}</p>
+                        <span style={{ fontSize: '11.5px', color: C.textMuted }}>{act.time}</span>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+                  )
+                })}
+              </div>
+            </Card>
           </motion.div>
         </div>
 
-        {/* RIGHT COLUMN */}
-        <div className="lg:col-span-2 space-y-5">
+        {/* RIGHT */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-          {/* Profile Completion */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.45, delay: 0.3 }}
-            style={{ ...cardBase, padding: '20px 22px' }}
-          >
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#f8fafc', marginBottom: 16 }}>Profile Completion</h2>
-            <div className="flex items-start gap-4">
-              <CircularProgress percent={profilePercent} />
-              <div style={{ flex: 1 }}>
-                <div className="space-y-1.5">
-                  {PROFILE_ITEMS.map((item) => (
-                    <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {item.done
-                        ? <CheckCircle2 size={14} color="#10b981" style={{ flexShrink: 0 }} />
-                        : <Circle size={14} color="#2d2d44" style={{ flexShrink: 0 }} />
-                      }
-                      <span style={{ fontSize: 12, color: item.done ? '#94a3b8' : '#f8fafc', textDecoration: item.done ? 'line-through' : 'none' }}>
-                        {item.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+          {/* Profile completion */}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.35 }}>
+            <Card style={{ padding: '24px' }}>
+              <SectionHeader title="Profile Strength" />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
+                <CircularProgress pct={profilePct} />
+                <p style={{ fontSize: '13px', color: C.textSub, marginTop: '10px', textAlign: 'center' }}>
+                  {profilePct < 70 ? 'Complete your profile to get more visibility' : 'Great profile! Keep it updated.'}
+                </p>
               </div>
-            </div>
-            <button
-              onClick={() => router.push('/seeker/profile')}
-              style={{ marginTop: 16, width: '100%', padding: '10px', borderRadius: 12, border: '1px solid rgba(108,99,255,0.4)', background: 'rgba(108,99,255,0.1)', color: '#a89dff', fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(108,99,255,0.2)'; e.currentTarget.style.borderColor = '#6c63ff' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(108,99,255,0.1)'; e.currentTarget.style.borderColor = 'rgba(108,99,255,0.4)' }}
-            >
-              Complete Profile →
-            </button>
-          </motion.div>
-
-          {/* Upcoming Interviews */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.45, delay: 0.38 }}
-            style={{ ...cardBase, padding: '20px 22px' }}
-          >
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#f8fafc', marginBottom: 14 }}>Upcoming Interviews</h2>
-            {INTERVIEWS.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8', fontSize: 13 }}>
-                <Calendar size={28} style={{ margin: '0 auto 8px', opacity: 0.4 }} />
-                No interviews scheduled
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {INTERVIEWS.map((iv) => (
-                  <div key={iv.id} style={{ background: 'rgba(6,182,212,0.06)', border: '1px solid rgba(6,182,212,0.2)', borderRadius: 12, padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc' }}>{iv.role}</div>
-                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{iv.company} · {iv.type}</div>
-                      </div>
-                      <div style={{ background: 'rgba(6,182,212,0.15)', color: '#67e8f9', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, flexShrink: 0 }}>
-                        {iv.date}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#94a3b8' }}>
-                        <Clock size={11} /> {iv.time}
-                      </div>
-                      <button
-                        onClick={() => toast('Opening meeting link — coming soon!')}
-                        style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#f8fafc', background: 'linear-gradient(135deg, #06b6d4, #0891b2)', border: 'none', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', transition: 'all 0.2s' }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 0 14px rgba(6,182,212,0.35)' }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none' }}
-                      >
-                        <Video size={11} /> Join
-                      </button>
-                    </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                {PROFILE_ITEMS.map(item => (
+                  <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {item.done
+                      ? <CheckCircle2 size={15} color={C.green} />
+                      : <Circle size={15} color={C.textMuted} />
+                    }
+                    <span style={{ fontSize: '12.5px', color: item.done ? C.textSub : C.text, textDecoration: item.done ? 'line-through' : 'none', opacity: item.done ? 0.6 : 1 }}>
+                      {item.label}
+                    </span>
                   </div>
                 ))}
               </div>
-            )}
+              <button
+                onClick={() => router.push('/seeker/profile')}
+                style={{ width: '100%', padding: '10px', borderRadius: C.radiusSm, background: C.purple, border: 'none', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Complete Profile
+              </button>
+            </Card>
           </motion.div>
 
-          {/* AI Tip of the Day */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.45, delay: 0.46 }}
-            style={{
-              borderRadius: 16,
-              padding: '18px 20px',
-              background: 'linear-gradient(135deg, rgba(108,99,255,0.25) 0%, rgba(79,70,229,0.2) 50%, rgba(6,182,212,0.1) 100%)',
-              border: '1px solid rgba(108,99,255,0.35)',
-              position: 'relative',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ position: 'absolute', top: -30, right: -30, width: 100, height: 100, background: 'rgba(108,99,255,0.15)', borderRadius: '50%', filter: 'blur(30px)' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, position: 'relative' }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(108,99,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Sparkles size={14} color="#a89dff" />
+          {/* Upcoming Interviews */}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.42 }}>
+            <Card style={{ padding: '24px' }}>
+              <SectionHeader title="Upcoming Interviews" />
+              {MOCK_INTERVIEWS.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: C.textMuted, fontSize: '13px' }}>
+                  No interviews scheduled yet
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {MOCK_INTERVIEWS.map(iv => (
+                    <div key={iv.id} style={{ padding: '14px', borderRadius: C.radiusSm, background: C.cyanDim, border: `1px solid ${C.cyan}30` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <div>
+                          <p style={{ fontSize: '13.5px', fontWeight: 700, color: C.text, margin: '0 0 2px' }}>{iv.company}</p>
+                          <p style={{ fontSize: '12px', color: C.textSub, margin: 0 }}>{iv.role}</p>
+                        </div>
+                        <span style={{ fontSize: '11px', background: C.cyanDim, color: C.cyan, padding: '2px 8px', borderRadius: '20px', fontWeight: 600, border: `1px solid ${C.cyan}30` }}>
+                          {iv.type}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '12px', color: C.textSub, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Calendar size={12} color={C.cyan} /> {iv.date} at {iv.time}
+                        </span>
+                        <button
+                          onClick={() => toast.info('Joining meeting — coming soon!')}
+                          style={{ padding: '5px 12px', borderRadius: '7px', background: C.cyan, border: 'none', color: '#fff', fontSize: '11.5px', fontWeight: 600, cursor: 'pointer' }}
+                        >
+                          Join
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          </motion.div>
+
+          {/* AI Tip */}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
+            <Card style={{ padding: '24px', background: 'linear-gradient(135deg, rgba(108,99,255,0.18) 0%, rgba(6,182,212,0.10) 100%)', border: `1px solid ${C.purple}40` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <Sparkles size={16} color={C.purple} />
+                <span style={{ fontSize: '12px', fontWeight: 700, color: C.purple, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Career AI Tip</span>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#a89dff', letterSpacing: '0.05em', textTransform: 'uppercase' }}>AI Career Tip</span>
-            </div>
-            <p style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.6, position: 'relative' }}>
-              Tailor your resume to each job description by mirroring the exact keywords from the posting — ATS systems at companies like Infosys and TCS scan for keyword density before a human ever reads your application.
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 10, fontSize: 11, color: '#94a3b8', position: 'relative' }}>
-              <Zap size={10} color="#f59e0b" /> Powered by LYU AI
-            </div>
+              <p style={{ fontSize: '13.5px', color: C.text, lineHeight: 1.7, margin: '0 0 14px' }}>
+                Candidates who apply within the first 24 hours of a job posting are <strong style={{ color: C.cyan }}>3x more likely</strong> to get a callback. Check new listings every morning!
+              </p>
+              <button
+                onClick={() => router.push('/seeker/chat')}
+                style={{ padding: '8px 16px', borderRadius: C.radiusSm, background: C.purple, border: 'none', color: '#fff', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Sparkles size={13} /> Ask Career AI
+              </button>
+            </Card>
           </motion.div>
 
         </div>
       </div>
 
-      {/* ── Activity Feed ─────────────────────────────────────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, delay: 0.5 }}
-        style={{ ...cardBase, padding: '20px 24px' }}
-      >
-        <div className="flex items-center justify-between mb-5">
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Bell size={16} color="#6c63ff" /> Recent Activity
-          </h2>
-          <span style={{ fontSize: 11, color: '#94a3b8' }}>Last 7 days</span>
-        </div>
-        <div style={{ position: 'relative' }}>
-          <div style={{ position: 'absolute', left: 17, top: 8, bottom: 8, width: 1, background: 'linear-gradient(to bottom, #1e1e2e, transparent)' }} />
-          <div className="space-y-4">
-            {ACTIVITY.map((item, i) => {
-              const cfg = ACTIVITY_ICON_CONFIG[item.icon]
-              const Icon = cfg.Icon
-              return (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.55 + i * 0.06 }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 14 }}
-                >
-                  <div style={{ width: 34, height: 34, borderRadius: 10, background: cfg.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${cfg.color}33`, zIndex: 1, position: 'relative' }}>
-                    <Icon size={14} color={cfg.color} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.4 }}>{item.text}</p>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <Clock size={10} /> {item.time}
-                  </div>
-                </motion.div>
-              )
-            })}
-          </div>
-        </div>
-      </motion.div>
-
+      <style>{`
+        @media (max-width: 1024px) {
+          .dash-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 768px) {
+          .stats-grid { grid-template-columns: repeat(2,1fr) !important; }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
     </div>
   )
 }
