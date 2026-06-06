@@ -207,18 +207,23 @@ export default function LearningPage() {
     setPhases([])
     setCompletedIds(new Set())
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_GROQ_API_KEY}`,
+        },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'llama-3.3-70b-versatile',
           max_tokens: 4000,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: `Generate a learning path for: ${prompt}` }],
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: `Generate a learning path for: ${prompt}` },
+          ],
         }),
       })
       const data = await res.json()
-      const raw = data.content?.map((c: { text?: string }) => c.text || '').join('') || ''
+      const raw = data.choices?.[0]?.message?.content || ''
       const cleaned = raw.replace(/```json|```/g, '').trim()
       const parsed: LearningPath = JSON.parse(cleaned)
       const phasesWithState = parsed.phases.map(p => ({

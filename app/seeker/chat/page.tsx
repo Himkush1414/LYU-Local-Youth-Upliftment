@@ -175,15 +175,17 @@ export default function CareerAIPage() {
     try {
       abortRef.current = new AbortController()
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_GROQ_API_KEY}`,
+        },
         signal: abortRef.current.signal,
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'llama-3.3-70b-versatile',
           max_tokens: 1000,
-          system: SYSTEM_PROMPT,
-          messages: apiMessages,
+          messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...apiMessages],
           stream: true,
         }),
       })
@@ -208,8 +210,9 @@ export default function CareerAIPage() {
               if (data === '[DONE]') continue
               try {
                 const parsed = JSON.parse(data)
-                if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-                  fullText += parsed.delta.text
+                const delta = parsed.choices?.[0]?.delta?.content
+                if (delta) {
+                  fullText += delta
                   setMessages(prev => prev.map(m =>
                     m.id === aiId ? { ...m, content: fullText } : m
                   ))
@@ -223,18 +226,20 @@ export default function CareerAIPage() {
       if (err instanceof Error && err.name === 'AbortError') return
       // Fallback: non-streaming
       try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_GROQ_API_KEY}`,
+          },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
+            model: 'llama-3.3-70b-versatile',
             max_tokens: 1000,
-            system: SYSTEM_PROMPT,
-            messages: apiMessages,
+            messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...apiMessages],
           }),
         })
         const data = await response.json()
-        const text = data.content?.map((c: { text?: string }) => c.text || '').join('') || 'Sorry, I could not process that. Please try again.'
+        const text = data.choices?.[0]?.message?.content || 'Sorry, I could not process that. Please try again.'
         setMessages(prev => prev.map(m => m.id === aiId ? { ...m, content: text } : m))
       } catch {
         setMessages(prev => prev.map(m =>
