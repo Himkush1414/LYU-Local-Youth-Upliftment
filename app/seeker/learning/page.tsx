@@ -1,153 +1,650 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
+import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Sparkles, BookOpen, Play, CheckCircle, Circle, Clock, Star,
+  TrendingUp, Zap, ExternalLink, ChevronDown, ChevronUp, X,
+  Youtube, Globe, BookMarked, PenTool, DollarSign, Award,
+  BarChart2, Loader2, Send, RotateCcw, Lock, Unlock
+} from 'lucide-react'
+import { toast } from 'sonner'
 
-const courses = [
-  { id: '1', title: 'Complete React Developer Course', provider: 'Udemy', duration: '40 hrs', level: 'Intermediate', skill: 'React', rating: 4.8, free: false, url: '#' },
-  { id: '2', title: 'JavaScript Fundamentals', provider: 'freeCodeCamp', duration: '15 hrs', level: 'Beginner', skill: 'JavaScript', rating: 4.9, free: true, url: '#' },
-  { id: '3', title: 'TypeScript Crash Course', provider: 'YouTube', duration: '8 hrs', level: 'Intermediate', skill: 'TypeScript', rating: 4.7, free: true, url: '#' },
-  { id: '4', title: 'Python for Beginners', provider: 'Coursera', duration: '25 hrs', level: 'Beginner', skill: 'Python', rating: 4.6, free: false, url: '#' },
-  { id: '5', title: 'Excel & Data Entry Mastery', provider: 'Udemy', duration: '12 hrs', level: 'Beginner', skill: 'Excel', rating: 4.5, free: false, url: '#' },
-  { id: '6', title: 'Digital Marketing Fundamentals', provider: 'Google', duration: '10 hrs', level: 'Beginner', skill: 'Marketing', rating: 4.8, free: true, url: '#' },
+const C = {
+  bg: '#0a0a0f', card: '#111118', cardHov: '#14141c',
+  border: '#1e1e2e', borderHov: '#2d2d44',
+  purple: '#6c63ff', purpleDim: 'rgba(108,99,255,0.12)',
+  cyan: '#06b6d4', cyanDim: 'rgba(6,182,212,0.12)',
+  green: '#10b981', greenDim: 'rgba(16,185,129,0.12)',
+  amber: '#f59e0b', amberDim: 'rgba(245,158,11,0.12)',
+  red: '#ef4444', redDim: 'rgba(239,68,68,0.12)',
+  text: '#f8fafc', sub: '#94a3b8', muted: '#475569',
+  r: '14px', rSm: '10px',
+}
+
+type BadgeType = 'YouTube' | 'Course' | 'Book' | 'Practice' | 'Mock Test'
+type PricingType = 'FREE' | 'PAID' | 'FREEMIUM'
+
+interface Resource {
+  id: string
+  title: string
+  provider: string
+  type: BadgeType
+  pricing: PricingType
+  duration: string
+  rating: number
+  url: string
+  description: string
+  completed: boolean
+}
+
+interface Phase {
+  id: string
+  title: string
+  duration: string
+  description: string
+  resources: Resource[]
+  expanded: boolean
+}
+
+interface LearningPath {
+  title: string
+  totalDuration: string
+  salaryImpact: string
+  skillsGained: string[]
+  phases: Phase[]
+  overview: string
+}
+
+const QUICK_PATHS = [
+  { label: 'React Developer', icon: '⚛️', color: C.cyan },
+  { label: 'Data Science', icon: '📊', color: C.purple },
+  { label: 'Cloud/DevOps', icon: '☁️', color: C.amber },
+  { label: 'UPSC', icon: '🏛️', color: C.green },
+  { label: 'SSC CGL', icon: '📋', color: C.amber },
+  { label: 'Banking PO', icon: '🏦', color: C.cyan },
+  { label: 'Product Manager', icon: '🚀', color: C.purple },
+  { label: 'Full Stack Dev', icon: '💻', color: C.green },
 ]
 
-const gaps = [
-  { skill: 'TypeScript', importance: 'High', jobs: 45, weeks: 4 },
-  { skill: 'Node.js', importance: 'Medium', jobs: 32, weeks: 6 },
-  { skill: 'Docker', importance: 'Low', jobs: 18, weeks: 8 },
-]
+const SYSTEM_PROMPT = `You are an expert Indian career counselor and learning path curator. When given a job description or career goal, generate a detailed, structured learning path specifically tailored for Indian job seekers.
 
-const faqItems = [
-  { title: 'How are missing skills identified?', content: 'We compare your listed skills against requirements of jobs you have saved or applied to, and identify what is most commonly required.' },
-  { title: 'Are the courses free?', content: 'We link to both free and paid resources. Free resources are clearly marked. We do not charge any commission.' },
-  { title: 'Will learning these skills guarantee a job?', content: 'No platform can guarantee employment. However, having in-demand skills significantly increases your match score and the number of jobs you qualify for.' },
-]
+Your response MUST be valid JSON in this exact structure:
+{
+  "title": "Learning Path title",
+  "totalDuration": "X months",
+  "salaryImpact": "₹X LPA - ₹Y LPA",
+  "skillsGained": ["skill1", "skill2", "skill3", "skill4", "skill5"],
+  "overview": "2-3 sentence overview of the learning path",
+  "phases": [
+    {
+      "id": "phase-1",
+      "title": "Phase title",
+      "duration": "X weeks",
+      "description": "What this phase covers",
+      "resources": [
+        {
+          "id": "r-1",
+          "title": "Resource title",
+          "provider": "Provider name",
+          "type": "YouTube|Course|Book|Practice|Mock Test",
+          "pricing": "FREE|PAID|FREEMIUM",
+          "duration": "X hours",
+          "rating": 4.5,
+          "url": "https://actual-url.com",
+          "description": "Brief description of what this resource covers"
+        }
+      ]
+    }
+  ]
+}
 
-const importanceColor = (i: string) =>
-  i === 'High' ? { color: '#b91c1c', bg: '#fef2f2', border: '1px solid #fecaca' } :
-  i === 'Medium' ? { color: '#b45309', bg: '#fffbeb', border: '1px solid #fde68a' } :
-  { color: '#475569', bg: '#f8fafc', border: '1px solid #e2e8f0' }
+RULES:
+- Include 3-4 phases with 3-5 resources each
+- Use REAL resources: YouTube channels (Hitesh Choudhary, Krish Naik, Apna College, CodeWithHarry, Physics Wallah, Unacademy, Striver), courses (Coursera, Udemy, Internshala, NPTEL, Testbook, PW Skills), books (standard textbooks)
+- For government exams (UPSC, SSC, Banking): include standard books like Laxmikant, M. Laxmikant, NCERT, Manorama, Lucent, Arihant, previous year papers
+- Use actual working URLs where possible
+- salaryImpact should be realistic Indian salary range in LPA
+- rating should be between 3.8 and 5.0
+- Return ONLY the JSON object, no markdown, no explanation`
+
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+      {[1,2,3,4,5].map(i => (
+        <Star
+          key={i}
+          size={11}
+          fill={i <= Math.round(rating) ? C.amber : 'transparent'}
+          color={i <= Math.round(rating) ? C.amber : C.muted}
+        />
+      ))}
+      <span style={{ fontSize: '11px', color: C.sub, marginLeft: '2px' }}>{rating.toFixed(1)}</span>
+    </div>
+  )
+}
+
+function TypeBadge({ type }: { type: BadgeType }) {
+  const config: Record<BadgeType, { color: string; icon: React.ReactNode }> = {
+    YouTube: { color: '#ef4444', icon: <Youtube size={10} /> },
+    Course: { color: C.purple, icon: <Globe size={10} /> },
+    Book: { color: C.amber, icon: <BookMarked size={10} /> },
+    Practice: { color: C.green, icon: <PenTool size={10} /> },
+    'Mock Test': { color: C.cyan, icon: <Award size={10} /> },
+  }
+  const { color, icon } = config[type]
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: '3px',
+      padding: '2px 7px', borderRadius: '20px', fontSize: '10px', fontWeight: 600,
+      background: `${color}20`, color, border: `1px solid ${color}40`,
+    }}>
+      {icon}{type}
+    </span>
+  )
+}
+
+function PricingBadge({ pricing }: { pricing: PricingType }) {
+  const config: Record<PricingType, { color: string; label: string }> = {
+    FREE: { color: C.green, label: 'FREE' },
+    PAID: { color: C.amber, label: 'PAID' },
+    FREEMIUM: { color: C.cyan, label: 'FREEMIUM' },
+  }
+  const { color, label } = config[pricing]
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center',
+      padding: '2px 7px', borderRadius: '20px', fontSize: '10px', fontWeight: 700,
+      background: `${color}18`, color, border: `1px solid ${color}35`,
+    }}>
+      {label}
+    </span>
+  )
+}
 
 export default function LearningPage() {
-  const [openFaq, setOpenFaq] = useState<number | null>(null)
-  const [filter, setFilter] = useState('All')
+  const [vw, setVw] = useState(1280)
+  useEffect(() => {
+    const update = () => setVw(window.innerWidth)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+  const isMobile = vw < 640
+  const isTablet = vw >= 640 && vw < 1100
 
-  const filtered = filter === 'All' ? courses : filter === 'Free' ? courses.filter(c => c.free) : courses.filter(c => c.level === filter)
+  const [jdInput, setJdInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [path, setPath] = useState<LearningPath | null>(null)
+  const [phases, setPhases] = useState<Phase[]>([])
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null)
+  const [hoveredQuick, setHoveredQuick] = useState<string | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const pad = isMobile ? '14px' : isTablet ? '20px 22px' : '22px 26px'
+
+  const totalResources = phases.reduce((a, p) => a + p.resources.length, 0)
+  const completedCount = completedIds.size
+  const progressPct = totalResources > 0 ? Math.round((completedCount / totalResources) * 100) : 0
+
+  function toggleResource(id: string) {
+    setCompletedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function togglePhase(id: string) {
+    setPhases(prev => prev.map(p => p.id === id ? { ...p, expanded: !p.expanded } : p))
+  }
+
+  async function generatePath(prompt: string) {
+    if (!prompt.trim()) { toast.error('Please enter a job description or career goal'); return }
+    setLoading(true)
+    setPath(null)
+    setPhases([])
+    setCompletedIds(new Set())
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4000,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: `Generate a learning path for: ${prompt}` }],
+        }),
+      })
+      const data = await res.json()
+      const raw = data.content?.map((c: { text?: string }) => c.text || '').join('') || ''
+      const cleaned = raw.replace(/```json|```/g, '').trim()
+      const parsed: LearningPath = JSON.parse(cleaned)
+      const phasesWithState = parsed.phases.map(p => ({
+        ...p,
+        expanded: true,
+        resources: p.resources.map(r => ({ ...r, completed: false })),
+      }))
+      setPath(parsed)
+      setPhases(phasesWithState)
+      toast.success('Learning path generated!')
+    } catch {
+      toast.error('Failed to generate path. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleQuickPath(label: string) {
+    setJdInput(label)
+    generatePath(label)
+  }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 28, fontFamily: 'Inter, system-ui, sans-serif' }}>
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', marginBottom: 4 }}>Learning & Skill Gap</h1>
-        <p style={{ color: '#64748b', fontSize: 14 }}>Skills you need to land the jobs you want</p>
-      </div>
+    <div style={{ minHeight: '100%', background: C.bg, padding: pad, fontFamily: 'system-ui, sans-serif' }}>
 
-      {/* Skill gaps */}
-      <div style={{ background: 'white', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c2410c' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
-            </svg>
+      {/* Header */}
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+          <div style={{
+            width: '36px', height: '36px', borderRadius: '10px',
+            background: C.purpleDim, border: `1px solid ${C.purple}40`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <BookOpen size={18} color={C.purple} />
           </div>
           <div>
-            <h2 style={{ fontWeight: 800, color: '#0f172a', fontSize: 15 }}>Your Skill Gaps</h2>
-            <p style={{ fontSize: 12, color: '#94a3b8' }}>Based on jobs you are interested in</p>
+            <h1 style={{ margin: 0, fontSize: isMobile ? '18px' : '22px', fontWeight: 700, color: C.text }}>
+              Learning Path
+            </h1>
+            <p style={{ margin: 0, fontSize: '12px', color: C.sub }}>AI-curated roadmap from JD to job-ready</p>
           </div>
-        </div>
-        <div>
-          {gaps.map((g, i) => {
-            const ic = importanceColor(g.importance)
-            return (
-              <div key={g.skill} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: i < gaps.length - 1 ? '1px solid #f8fafc' : 'none', flexWrap: 'wrap', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 9999, ...ic }}>{g.skill}</span>
-                  <div>
-                    <p style={{ fontSize: 13, color: '#475569' }}>{g.jobs} jobs require this</p>
-                    <p style={{ fontSize: 11, color: '#94a3b8' }}>~{g.weeks} weeks to learn</p>
-                  </div>
-                </div>
-                <a href="#" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: '#2563eb', textDecoration: 'none' }}>
-                  Learn now
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6"/>
-                  </svg>
-                </a>
-              </div>
-            )
-          })}
         </div>
       </div>
 
-      {/* Courses */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-          <h2 style={{ fontWeight: 800, color: '#0f172a', fontSize: 16 }}>Recommended Courses</h2>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {['All', 'Free', 'Beginner', 'Intermediate'].map(f => (
-              <button key={f} onClick={() => setFilter(f)} style={{
-                padding: '5px 13px', borderRadius: 9999, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: 'none',
-                background: filter === f ? '#2563eb' : '#f1f5f9', color: filter === f ? 'white' : '#475569', transition: 'all 0.15s',
-              }}>{f}</button>
+      {/* Input Section */}
+      <div style={{
+        background: C.card, border: `1px solid ${C.border}`, borderRadius: C.r,
+        padding: isMobile ? '16px' : '20px', marginBottom: '20px',
+      }}>
+        <p style={{ margin: '0 0 12px', fontSize: '13px', fontWeight: 600, color: C.text }}>
+          Paste a Job Description or describe your goal
+        </p>
+        <div style={{ position: 'relative' }}>
+          <textarea
+            ref={textareaRef}
+            value={jdInput}
+            onChange={e => setJdInput(e.target.value)}
+            placeholder="e.g. We are looking for a React Developer with 2+ years of experience in TypeScript, Redux, and REST APIs..."
+            rows={isMobile ? 4 : 5}
+            style={{
+              width: '100%', background: C.bg, border: `1px solid ${C.border}`,
+              borderRadius: C.rSm, padding: '12px 44px 12px 14px',
+              color: C.text, fontSize: '13px', resize: 'vertical',
+              fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+              lineHeight: 1.6,
+            }}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generatePath(jdInput) }}
+          />
+          <button
+            onClick={() => generatePath(jdInput)}
+            disabled={loading}
+            style={{
+              position: 'absolute', bottom: '10px', right: '10px',
+              width: '32px', height: '32px', borderRadius: '8px',
+              background: loading ? C.muted : C.purple, border: 'none',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: loading ? 'default' : 'pointer', transition: 'all 0.2s',
+            }}
+          >
+            {loading ? <Loader2 size={14} color={C.text} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} color={C.text} />}
+          </button>
+        </div>
+        <p style={{ margin: '8px 0 0', fontSize: '11px', color: C.muted }}>⌘+Enter to generate</p>
+
+        {/* Quick Path Buttons */}
+        <div style={{ marginTop: '16px' }}>
+          <p style={{ margin: '0 0 10px', fontSize: '11px', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Quick Paths</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {QUICK_PATHS.map(qp => (
+              <motion.button
+                key={qp.label}
+                onClick={() => handleQuickPath(qp.label)}
+                onHoverStart={() => setHoveredQuick(qp.label)}
+                onHoverEnd={() => setHoveredQuick(null)}
+                whileTap={{ scale: 0.95 }}
+                style={{
+                  padding: '6px 12px', borderRadius: '20px', border: `1px solid ${hoveredQuick === qp.label ? qp.color : C.border}`,
+                  background: hoveredQuick === qp.label ? `${qp.color}18` : C.bg,
+                  color: hoveredQuick === qp.label ? qp.color : C.sub,
+                  fontSize: '12px', cursor: 'pointer', transition: 'all 0.2s',
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                }}
+              >
+                <span>{qp.icon}</span>{qp.label}
+              </motion.button>
             ))}
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 14 }}>
-          {filtered.map(c => (
-            <div key={c.id} style={{ background: 'white', borderRadius: 14, border: '1px solid #e2e8f0', padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', transition: 'all 0.2s' }}
-              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)'; e.currentTarget.style.transform = 'translateY(0)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <p style={{ fontWeight: 800, color: '#0f172a', fontSize: 14, flex: 1, lineHeight: 1.4, marginRight: 8 }}>{c.title}</p>
-                {c.free && <span style={{ fontSize: 10, fontWeight: 800, color: '#15803d', background: '#f0fdf4', padding: '3px 8px', borderRadius: 9999, border: '1px solid #bbf7d0', flexShrink: 0 }}>FREE</span>}
-              </div>
-              <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 12 }}>{c.provider}</p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', padding: '3px 9px', borderRadius: 9999, border: '1px solid #bfdbfe' }}>{c.skill}</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', background: '#f8fafc', padding: '3px 9px', borderRadius: 9999, border: '1px solid #e2e8f0' }}>{c.level}</span>
-                <span style={{ fontSize: 11, color: '#64748b', display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                  {c.duration}
-                </span>
-                <span style={{ fontSize: 11, color: '#d97706', display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="#fbbf24" stroke="#fbbf24" strokeWidth="0"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                  {c.rating}
-                </span>
-              </div>
-              <a href={c.url} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#2563eb', textDecoration: 'none' }}>
-                Start Learning
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                </svg>
-              </a>
-            </div>
-          ))}
-        </div>
       </div>
 
-      {/* FAQ */}
-      <div>
-        <h2 style={{ fontWeight: 800, color: '#0f172a', fontSize: 16, marginBottom: 12 }}>FAQ</h2>
-        <div style={{ borderRadius: 16, border: '1px solid #e2e8f0', background: 'white', overflow: 'hidden' }}>
-          {faqItems.map((item, i) => (
-            <div key={i} style={{ borderBottom: i < faqItems.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
-              <button onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
-                <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>{item.title}</span>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                  style={{ flexShrink: 0, transform: openFaq === i ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </button>
-              {openFaq === i && (
-                <div style={{ padding: '0 20px 16px', fontSize: 13, color: '#475569', lineHeight: 1.7 }}>
-                  {item.content}
+      {/* Loading State */}
+      <AnimatePresence>
+        {loading && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            style={{
+              background: C.card, border: `1px solid ${C.purple}40`, borderRadius: C.r,
+              padding: '32px', textAlign: 'center', marginBottom: '20px',
+            }}
+          >
+            <div style={{
+              width: '48px', height: '48px', borderRadius: '50%',
+              background: C.purpleDim, border: `1px solid ${C.purple}50`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}>
+              <Sparkles size={22} color={C.purple} style={{ animation: 'pulse 1.5s ease-in-out infinite' }} />
+            </div>
+            <p style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: 600, color: C.text }}>
+              Curating your learning path…
+            </p>
+            <p style={{ margin: 0, fontSize: '13px', color: C.sub }}>
+              Finding the best Indian resources for your goal
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '16px' }}>
+              {[0,1,2].map(i => (
+                <div key={i} style={{
+                  width: '8px', height: '8px', borderRadius: '50%', background: C.purple,
+                  animation: `bounce 1s ease-in-out ${i * 0.2}s infinite`,
+                }} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Path Results */}
+      <AnimatePresence>
+        {path && phases.length > 0 && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
+
+            {/* Path Header Stats */}
+            <div style={{
+              background: C.card, border: `1px solid ${C.border}`, borderRadius: C.r,
+              padding: isMobile ? '16px' : '20px', marginBottom: '16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <Zap size={16} color={C.purple} />
+                    <h2 style={{ margin: 0, fontSize: isMobile ? '15px' : '17px', fontWeight: 700, color: C.text }}>{path.title}</h2>
+                  </div>
+                  <p style={{ margin: '0 0 14px', fontSize: '13px', color: C.sub, lineHeight: 1.6 }}>{path.overview}</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {path.skillsGained.map(s => (
+                      <span key={s} style={{
+                        padding: '3px 10px', borderRadius: '20px', fontSize: '11px',
+                        background: C.purpleDim, color: C.purple, border: `1px solid ${C.purple}30`,
+                      }}>{s}</span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: isMobile ? '10px' : '14px', flexWrap: 'wrap' }}>
+                  {[
+                    { icon: <Clock size={14} color={C.cyan} />, label: 'Duration', value: path.totalDuration, color: C.cyan },
+                    { icon: <TrendingUp size={14} color={C.green} />, label: 'Salary Range', value: path.salaryImpact, color: C.green },
+                    { icon: <BarChart2 size={14} color={C.amber} />, label: 'Resources', value: `${totalResources} items`, color: C.amber },
+                  ].map(stat => (
+                    <div key={stat.label} style={{
+                      background: C.bg, border: `1px solid ${C.border}`, borderRadius: C.rSm,
+                      padding: '10px 14px', textAlign: 'center', minWidth: '90px',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '4px' }}>{stat.icon}</div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: stat.color }}>{stat.value}</div>
+                      <div style={{ fontSize: '10px', color: C.muted }}>{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              {totalResources > 0 && (
+                <div style={{ marginTop: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '12px', color: C.sub }}>Progress</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: progressPct === 100 ? C.green : C.purple }}>
+                      {completedCount}/{totalResources} ({progressPct}%)
+                    </span>
+                  </div>
+                  <div style={{ height: '6px', background: C.border, borderRadius: '99px', overflow: 'hidden' }}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progressPct}%` }}
+                      transition={{ duration: 0.5, ease: 'easeOut' }}
+                      style={{ height: '100%', background: progressPct === 100 ? C.green : C.purple, borderRadius: '99px' }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
-          ))}
+
+            {/* Phases */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {phases.map((phase, phaseIdx) => {
+                const phaseCompleted = phase.resources.filter(r => completedIds.has(r.id)).length
+                const phaseTotal = phase.resources.length
+                const phasePct = phaseTotal > 0 ? Math.round((phaseCompleted / phaseTotal) * 100) : 0
+
+                return (
+                  <motion.div
+                    key={phase.id}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: phaseIdx * 0.08 }}
+                    style={{
+                      background: C.card, border: `1px solid ${C.border}`, borderRadius: C.r, overflow: 'hidden',
+                    }}
+                  >
+                    {/* Phase Header */}
+                    <button
+                      onClick={() => togglePhase(phase.id)}
+                      style={{
+                        width: '100%', padding: isMobile ? '14px' : '16px 20px',
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '12px', textAlign: 'left',
+                      }}
+                    >
+                      <div style={{
+                        width: '32px', height: '32px', borderRadius: '8px',
+                        background: C.purpleDim, border: `1px solid ${C.purple}40`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '13px', fontWeight: 700, color: C.purple, flexShrink: 0,
+                      }}>
+                        {phaseIdx + 1}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 600, color: C.text }}>{phase.title}</span>
+                          <span style={{ fontSize: '11px', color: C.muted, background: C.bg, padding: '2px 8px', borderRadius: '20px', border: `1px solid ${C.border}` }}>
+                            {phase.duration}
+                          </span>
+                          {phasePct === 100 && (
+                            <span style={{ fontSize: '11px', color: C.green, background: C.greenDim, padding: '2px 8px', borderRadius: '20px' }}>
+                              ✓ Complete
+                            </span>
+                          )}
+                        </div>
+                        <p style={{ margin: '2px 0 0', fontSize: '12px', color: C.sub }}>{phase.description}</p>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                        <span style={{ fontSize: '11px', color: phasePct === 100 ? C.green : C.sub }}>
+                          {phaseCompleted}/{phaseTotal}
+                        </span>
+                        {phase.expanded ? <ChevronUp size={16} color={C.muted} /> : <ChevronDown size={16} color={C.muted} />}
+                      </div>
+                    </button>
+
+                    {/* Resources */}
+                    <AnimatePresence>
+                      {phase.expanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.25 }}
+                          style={{ overflow: 'hidden' }}
+                        >
+                          <div style={{
+                            borderTop: `1px solid ${C.border}`,
+                            display: 'grid',
+                            gridTemplateColumns: !isMobile && !isTablet ? '1fr 1fr' : '1fr',
+                            gap: '1px', background: C.border,
+                          }}>
+                            {phase.resources.map((res) => {
+                              const done = completedIds.has(res.id)
+                              const hov = hoveredCard === res.id
+
+                              return (
+                                <div
+                                  key={res.id}
+                                  onMouseEnter={() => setHoveredCard(res.id)}
+                                  onMouseLeave={() => setHoveredCard(null)}
+                                  style={{
+                                    background: hov ? C.cardHov : C.card,
+                                    padding: isMobile ? '14px' : '16px 18px',
+                                    transition: 'background 0.2s',
+                                    position: 'relative',
+                                  }}
+                                >
+                                  {/* Completion toggle */}
+                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                                    <button
+                                      onClick={() => toggleResource(res.id)}
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', flexShrink: 0, marginTop: '1px' }}
+                                    >
+                                      {done
+                                        ? <CheckCircle size={18} color={C.green} fill={C.green} />
+                                        : <Circle size={18} color={C.muted} />
+                                      }
+                                    </button>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
+                                        <span style={{
+                                          fontSize: '13px', fontWeight: 600,
+                                          color: done ? C.muted : C.text,
+                                          textDecoration: done ? 'line-through' : 'none',
+                                          lineHeight: 1.4,
+                                        }}>
+                                          {res.title}
+                                        </span>
+                                        <a
+                                          href={res.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            width: '26px', height: '26px', borderRadius: '6px',
+                                            background: hov ? C.purpleDim : 'transparent',
+                                            border: `1px solid ${hov ? C.purple + '40' : 'transparent'}`,
+                                            color: hov ? C.purple : C.muted,
+                                            transition: 'all 0.2s', flexShrink: 0,
+                                          }}
+                                        >
+                                          <ExternalLink size={12} />
+                                        </a>
+                                      </div>
+                                      <p style={{ margin: '0 0 8px', fontSize: '11px', color: C.sub, lineHeight: 1.5 }}>
+                                        {res.description}
+                                      </p>
+                                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
+                                        <TypeBadge type={res.type} />
+                                        <PricingBadge pricing={res.pricing} />
+                                        <span style={{ fontSize: '11px', color: C.muted, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                          <Clock size={10} color={C.muted} />{res.duration}
+                                        </span>
+                                        <span style={{ fontSize: '11px', color: C.sub }}>{res.provider}</span>
+                                        <StarRating rating={res.rating} />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                )
+              })}
+            </div>
+
+            {/* Reset */}
+            <div style={{ textAlign: 'center', marginTop: '24px', paddingBottom: '8px' }}>
+              <button
+                onClick={() => { setPath(null); setPhases([]); setJdInput(''); setCompletedIds(new Set()) }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '8px 18px', borderRadius: '8px',
+                  background: C.bg, border: `1px solid ${C.border}`,
+                  color: C.sub, fontSize: '13px', cursor: 'pointer',
+                }}
+              >
+                <RotateCcw size={13} /> Generate New Path
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Empty State */}
+      {!path && !loading && (
+        <div style={{
+          textAlign: 'center', padding: isMobile ? '40px 20px' : '60px 40px',
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: C.r,
+        }}>
+          <div style={{
+            width: '64px', height: '64px', borderRadius: '16px',
+            background: C.purpleDim, border: `1px solid ${C.purple}30`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 16px',
+          }}>
+            <BookOpen size={28} color={C.purple} />
+          </div>
+          <h3 style={{ margin: '0 0 8px', fontSize: '17px', fontWeight: 700, color: C.text }}>
+            Your AI Learning Path
+          </h3>
+          <p style={{ margin: '0 0 20px', fontSize: '13px', color: C.sub, maxWidth: '380px', margin: '0 auto 20px', lineHeight: 1.6 }}>
+            Paste any job description or pick a quick path above. Claude will curate the best Indian resources — YouTube channels, courses, books, and practice tests — tailored to your goal.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', flexWrap: 'wrap' }}>
+            {[
+              { icon: <Youtube size={14} color={C.red} />, label: 'Real YouTube Channels' },
+              { icon: <Globe size={14} color={C.purple} />, label: 'Top Course Platforms' },
+              { icon: <BookMarked size={14} color={C.amber} />, label: 'Standard Books' },
+              { icon: <Award size={14} color={C.cyan} />, label: 'Mock Tests' },
+            ].map(f => (
+              <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: C.sub }}>
+                {f.icon}{f.label}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+        textarea:focus { border-color: ${C.purple} !important; box-shadow: 0 0 0 3px ${C.purpleDim}; }
+        textarea::placeholder { color: ${C.muted}; }
+        ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 99px; }
+      `}</style>
     </div>
   )
 }
