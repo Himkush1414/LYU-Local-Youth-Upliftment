@@ -1,190 +1,311 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Briefcase, MapPin, Calendar, Clock, ChevronRight,
+  Search, Filter, CheckCircle2, XCircle,
+  AlertCircle, MessageSquare, FileText, X, Inbox,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { useRouter } from 'next/navigation'
 
-function timeAgo(date: string) {
-  if (!date) return ''
-  const diff = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`
-  return `${Math.floor(diff / 604800)}w ago`
+const C = {
+  bg: '#0a0a0f', card: '#111118', cardHov: '#14141c',
+  border: '#1e1e2e', borderHov: '#2d2d44',
+  purple: '#6c63ff', purpleDim: 'rgba(108,99,255,0.12)',
+  cyan: '#06b6d4', cyanDim: 'rgba(6,182,212,0.12)',
+  green: '#10b981', greenDim: 'rgba(16,185,129,0.12)',
+  amber: '#f59e0b', amberDim: 'rgba(245,158,11,0.12)',
+  red: '#ef4444', redDim: 'rgba(239,68,68,0.12)',
+  text: '#f8fafc', sub: '#94a3b8', muted: '#475569',
+  r: '14px', rSm: '10px',
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  applied:     { label: 'Applied',     color: '#1d4ed8', bg: '#eff6ff', dot: '#3b82f6' },
-  viewed:      { label: 'Viewed',      color: '#b45309', bg: '#fffbeb', dot: '#f59e0b' },
-  shortlisted: { label: 'Shortlisted', color: '#15803d', bg: '#f0fdf4', dot: '#22c55e' },
-  rejected:    { label: 'Rejected',    color: '#b91c1c', bg: '#fef2f2', dot: '#ef4444' },
-  hired:       { label: 'Hired',       color: '#065f46', bg: '#ecfdf5', dot: '#10b981' },
-  withdrawn:   { label: 'Withdrawn',   color: '#475569', bg: '#f8fafc', dot: '#94a3b8' },
+type Status = 'Applied' | 'In Review' | 'Interview' | 'Offer' | 'Rejected'
+
+const STATUS_CFG: Record<Status, { color: string; bg: string; icon: React.FC<{ size?: number; color?: string }> }> = {
+  'Applied':   { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)',  icon: Clock        },
+  'In Review': { color: C.amber,   bg: C.amberDim,               icon: AlertCircle  },
+  'Interview': { color: C.cyan,    bg: C.cyanDim,                icon: Calendar     },
+  'Offer':     { color: C.green,   bg: C.greenDim,               icon: CheckCircle2 },
+  'Rejected':  { color: C.red,     bg: C.redDim,                 icon: XCircle      },
 }
 
-const TABS = ['All', 'Applied', 'Viewed', 'Shortlisted', 'Rejected']
+const APPS = [
+  { id:'1',  company:'Razorpay',  init:'RZ', color:'#0ea5e9', role:'Frontend Engineer',    loc:'Bangalore', applied:'Jun 4',  status:'In Review' as Status, salary:'20–30 LPA', type:'Full-time', notes:'Recruiter reached out on LinkedIn. Round 1 scheduled for next week.' },
+  { id:'2',  company:'Swiggy',    init:'SW', color:'#f97316', role:'Software Engineer II', loc:'Bangalore', applied:'Jun 2',  status:'Interview' as Status, salary:'18–26 LPA', type:'Full-time', notes:'Interview on Jun 8 at 11 AM. Prepare DSA + system design.' },
+  { id:'3',  company:'CRED',      init:'CR', color:'#8b5cf6', role:'Product Engineer',     loc:'Bangalore', applied:'May 30', status:'Applied'   as Status, salary:'22–35 LPA', type:'Full-time', notes:'Applied via company portal. Waiting for response.' },
+  { id:'4',  company:'PhonePe',   init:'PP', color:'#6366f1', role:'React Developer',      loc:'Pune',      applied:'May 28', status:'Rejected'  as Status, salary:'15–22 LPA', type:'Full-time', notes:'Rejected at resume screening stage. Focus on system design prep.' },
+  { id:'5',  company:'Zepto',     init:'ZP', color:'#10b981', role:'Full Stack Developer', loc:'Mumbai',    applied:'May 22', status:'Offer'     as Status, salary:'16–24 LPA', type:'Full-time', notes:'Offer received! CTC: 22 LPA. Deadline to accept: Jun 15.' },
+  { id:'6',  company:'Meesho',    init:'MS', color:'#f43f5e', role:'Product Engineer',     loc:'Bangalore', applied:'May 20', status:'Applied'   as Status, salary:'15–22 LPA', type:'Full-time', notes:'Applied via referral from college senior.' },
+  { id:'7',  company:'Groww',     init:'GR', color:'#22c55e', role:'Frontend Developer',   loc:'Bangalore', applied:'May 18', status:'In Review' as Status, salary:'14–20 LPA', type:'Full-time', notes:'HR called for initial screening last week.' },
+  { id:'8',  company:'Nykaa',     init:'NK', color:'#ec4899', role:'Software Engineer',    loc:'Mumbai',    applied:'May 15', status:'Interview' as Status, salary:'12–18 LPA', type:'Full-time', notes:'Final round on Jun 9. Prepare machine coding round.' },
+  { id:'9',  company:'Ola',       init:'OL', color:'#eab308', role:'Backend Engineer',     loc:'Bangalore', applied:'May 12', status:'Rejected'  as Status, salary:'14–20 LPA', type:'Full-time', notes:'Did not clear technical round 2. Work on problem-solving speed.' },
+  { id:'10', company:'Flipkart',  init:'FL', color:'#2563eb', role:'SDE-1',                loc:'Bangalore', applied:'May 10', status:'Applied'   as Status, salary:'20–28 LPA', type:'Full-time', notes:'Applied for Flipkart Grid Program.' },
+]
+
+const ALL_STATUSES: Status[] = ['Applied', 'In Review', 'Interview', 'Offer', 'Rejected']
 
 export default function ApplicationsPage() {
-  const [applications, setApplications] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('All')
-  const supabase = createClient()
+  const router = useRouter()
+  const [query, setQuery] = useState('')
+  const [activeStatus, setActiveStatus] = useState<'All' | Status>('All')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [vw, setVw] = useState(1280)
 
   useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
-      const { data } = await supabase
-        .from('applications')
-        .select('*, jobs(title, company_id, city, salary_min, salary_max, salary_disclosed, employment_type, work_type)')
-        .eq('seeker_id', user.id)
-        .order('created_at', { ascending: false })
-      setApplications(data || [])
-      setLoading(false)
-    }
-    load()
+    const upd = () => setVw(window.innerWidth)
+    upd()
+    window.addEventListener('resize', upd)
+    return () => window.removeEventListener('resize', upd)
   }, [])
 
-  const filtered = activeTab === 'All' ? applications : applications.filter(a => a.status === activeTab.toLowerCase())
+  const isMobile = vw < 640
 
-  const counts = TABS.slice(1).reduce((acc, tab) => {
-    acc[tab] = applications.filter(a => a.status === tab.toLowerCase()).length
+  const filtered = APPS.filter(a => {
+    const matchStatus = activeStatus === 'All' || a.status === activeStatus
+    const matchQuery = !query.trim() ||
+      a.company.toLowerCase().includes(query.toLowerCase()) ||
+      a.role.toLowerCase().includes(query.toLowerCase())
+    return matchStatus && matchQuery
+  })
+
+  const counts = ALL_STATUSES.reduce((acc, s) => {
+    acc[s] = APPS.filter(a => a.status === s).length
     return acc
-  }, {} as Record<string, number>)
+  }, {} as Record<Status, number>)
 
-  const fmtSalary = (min: number, max: number, disc: boolean) => {
-    if (!disc) return 'Not disclosed'
-    const f = (n: number) => n >= 100000 ? `₹${(n/100000).toFixed(0)}L` : `₹${(n/1000).toFixed(0)}K`
-    return min && max ? `${f(min)}–${f(max)}/yr` : min ? `${f(min)}+` : 'Not disclosed'
-  }
+  const p = isMobile ? '14px' : '22px 26px'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 22, fontFamily: 'Inter, system-ui, sans-serif', paddingBottom: 60 }}>
+    <div style={{ padding: p, background: C.bg, minHeight: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 3 }}>My Applications</h1>
-        <p style={{ fontSize: 13, color: '#64748b' }}>{loading ? 'Loading...' : `${applications.length} total applications`}</p>
-      </div>
-
-      {/* Summary cards */}
-      {!loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
-          {TABS.slice(1).map(tab => {
-            const cfg = STATUS_CONFIG[tab.toLowerCase()]
-            return (
-              <button key={tab} onClick={() => setActiveTab(tab)}
-                style={{ background: activeTab === tab ? cfg.bg : 'white', borderRadius: 14, border: `2px solid ${activeTab === tab ? cfg.dot : '#f1f5f9'}`, padding: '16px 18px', textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s', boxShadow: activeTab === tab ? '0 4px 12px rgba(0,0,0,0.06)' : '0 1px 3px rgba(0,0,0,0.04)' }}>
-                <p style={{ fontSize: 26, fontWeight: 900, color: '#0f172a', marginBottom: 4 }}>{counts[tab] || 0}</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: cfg.dot, flexShrink: 0 }} />
-                  <p style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>{tab}</p>
-                </div>
-              </button>
-            )
-          })}
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ fontSize: isMobile ? '18px' : '20px', fontWeight: 800, color: C.text, margin: '0 0 3px', letterSpacing: '-0.02em' }}>
+            Applications
+          </h1>
+          <p style={{ fontSize: '13px', color: C.sub, margin: 0 }}>
+            Track all your job applications · <span style={{ color: C.purple, fontWeight: 600 }}>{APPS.length} total</span>
+          </p>
         </div>
-      )}
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, background: '#f1f5f9', borderRadius: 11, padding: 4, width: 'fit-content', flexWrap: 'wrap' }}>
-        {TABS.map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: activeTab === tab ? 700 : 500, cursor: 'pointer', border: 'none', fontFamily: 'inherit', transition: 'all 0.15s', background: activeTab === tab ? 'white' : 'transparent', color: activeTab === tab ? '#0f172a' : '#64748b', boxShadow: activeTab === tab ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>
-            {tab} {tab !== 'All' && counts[tab] > 0 && <span style={{ fontSize: 11, background: activeTab === tab ? '#f1f5f9' : '#e2e8f0', borderRadius: 9999, padding: '1px 6px', marginLeft: 4 }}>{counts[tab]}</span>}
-          </button>
-        ))}
+        <button
+          onClick={() => router.push('/seeker/opportunities')}
+          style={{ padding: '9px 18px', borderRadius: C.rSm, background: C.purple, border: 'none', color: '#fff', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}
+        >
+          <Briefcase size={13} /> Browse Jobs
+        </button>
       </div>
 
-      {/* Application list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {loading ? (
-          [...Array(3)].map((_, i) => (
-            <div key={i} style={{ background: 'white', borderRadius: 16, border: '1px solid #f1f5f9', padding: '20px 22px', display: 'flex', gap: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-              <div style={{ width: 48, height: 48, borderRadius: 13, flexShrink: 0, background: 'linear-gradient(90deg,#f1f5f9 25%,#e8edf2 50%,#f1f5f9 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }} />
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9 }}>
-                <div style={{ height: 14, width: '45%', borderRadius: 7, background: 'linear-gradient(90deg,#f1f5f9 25%,#e8edf2 50%,#f1f5f9 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }} />
-                <div style={{ height: 11, width: '30%', borderRadius: 6, background: 'linear-gradient(90deg,#f1f5f9 25%,#e8edf2 50%,#f1f5f9 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }} />
-              </div>
-            </div>
-          ))
-        ) : filtered.length === 0 ? (
-          <div style={{ background: 'white', borderRadius: 16, border: '1px solid #f1f5f9', padding: '60px 24px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <div style={{ width: 56, height: 56, background: '#f8fafc', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: '#94a3b8' }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            </div>
-            <p style={{ fontWeight: 700, color: '#0f172a', fontSize: 16, marginBottom: 6 }}>
-              {activeTab === 'All' ? 'No applications yet' : `No ${activeTab.toLowerCase()} applications`}
-            </p>
-            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 18 }}>
-              {activeTab === 'All' ? 'Start applying to jobs that match your skills' : `You have no applications in ${activeTab} status`}
-            </p>
-            {activeTab === 'All' && (
-              <Link href="/seeker/jobs" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#2563eb', color: 'white', fontWeight: 700, fontSize: 13, padding: '10px 20px', borderRadius: 11, textDecoration: 'none' }}>
-                Browse Jobs
-              </Link>
-            )}
-          </div>
-        ) : filtered.map((app: any) => {
-          const job = app.jobs
-          const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.applied
-          const companyInitial = (job?.employer_name || app.job_id || 'J')[0]
+      {/* Status overview cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 3 : 5}, 1fr)`, gap: '10px' }}>
+        {ALL_STATUSES.map(s => {
+          const cfg = STATUS_CFG[s]
+          const Icon = cfg.icon
+          const isActive = activeStatus === s
           return (
-            <div key={app.id} style={{ background: 'white', borderRadius: 16, border: '1px solid #f1f5f9', padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', transition: 'all 0.2s' }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.06)' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#f1f5f9'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)' }}>
-              <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                <div style={{ width: 48, height: 48, borderRadius: 13, background: 'linear-gradient(135deg,#2563eb,#4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'white', fontWeight: 900, fontSize: 20, boxShadow: '0 4px 12px rgba(37,99,235,0.15)' }}>
-                  {companyInitial}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-                    <div>
-                      <p style={{ fontWeight: 800, color: '#0f172a', fontSize: 15, marginBottom: 2 }}>{job?.title || 'Job Title'}</p>
-                      <p style={{ fontSize: 13, color: '#475569' }}>{app.employer_name || 'Company'}</p>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: cfg.color, background: cfg.bg, padding: '4px 12px', borderRadius: 9999, border: `1px solid ${cfg.dot}30` }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: cfg.dot, flexShrink: 0 }} />
-                        {cfg.label}
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 }}>
-                    {job?.city && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, color: '#64748b' }}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                        {job.city}
-                      </span>
-                    )}
-                    {job?.salary_min && (
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{fmtSalary(job.salary_min, job.salary_max, job.salary_disclosed)}</span>
-                    )}
-                    {app.match_score && (
-                      <span style={{ fontSize: 11, fontWeight: 700, color: app.match_score >= 80 ? '#15803d' : app.match_score >= 60 ? '#b45309' : '#b91c1c', background: app.match_score >= 80 ? '#f0fdf4' : app.match_score >= 60 ? '#fffbeb' : '#fef2f2', padding: '2px 8px', borderRadius: 9999 }}>
-                        {app.match_score}% match
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#94a3b8' }}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                      Applied {timeAgo(app.applied_at || app.created_at)}
-                    </span>
-                    {app.status === 'shortlisted' && (
-                      <Link href="/seeker/messages" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f0fdf4', color: '#15803d', fontWeight: 700, fontSize: 12, padding: '7px 14px', borderRadius: 9, textDecoration: 'none', border: '1px solid #bbf7d0' }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                        Message Employer
-                      </Link>
-                    )}
-                  </div>
-                </div>
+            <motion.div
+              key={s}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setActiveStatus(isActive ? 'All' : s)}
+              style={{
+                padding: isMobile ? '12px 8px' : '16px', borderRadius: C.r,
+                cursor: 'pointer', textAlign: 'center',
+                border: `1px solid ${isActive ? cfg.color + '55' : C.border}`,
+                background: isActive ? cfg.bg : C.card,
+                transition: 'all 0.18s',
+              }}
+            >
+              <Icon size={16} color={cfg.color} />
+              <div style={{ fontSize: isMobile ? '22px' : '24px', fontWeight: 800, color: C.text, margin: '6px 0 2px', letterSpacing: '-0.03em' }}>
+                {counts[s]}
               </div>
-            </div>
+              <div style={{ fontSize: isMobile ? '10px' : '11px', color: C.sub, fontWeight: 500 }}>{s}</div>
+            </motion.div>
           )
         })}
       </div>
 
-      <style>{`@keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }`}</style>
+      {/* Search + filter clear */}
+      <div style={{ display: 'flex', gap: '10px', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: C.card, border: `1px solid ${C.border}`, borderRadius: C.rSm, padding: '9px 14px' }}>
+          <Search size={14} color={C.muted} />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search by company or role..."
+            style={{ background: 'none', border: 'none', outline: 'none', color: C.text, fontSize: '13px', flex: 1 }}
+          />
+          {query && (
+            <button onClick={() => setQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, display: 'flex' }}>
+              <X size={13} />
+            </button>
+          )}
+        </div>
+        {activeStatus !== 'All' && (
+          <button
+            onClick={() => setActiveStatus('All')}
+            style={{ padding: '9px 14px', borderRadius: C.rSm, background: C.redDim, border: `1px solid ${C.red}40`, color: C.red, fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}
+          >
+            <Filter size={12} /> Clear
+          </button>
+        )}
+      </div>
+
+      {/* Applications list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {filtered.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '48px 20px' }}>
+            <Inbox size={32} color={C.muted} style={{ marginBottom: '12px' }} />
+            <p style={{ color: C.sub, fontSize: '14px', margin: 0 }}>No applications found</p>
+          </div>
+        )}
+
+        <AnimatePresence>
+          {filtered.map((app, i) => {
+            const cfg = STATUS_CFG[app.status]
+            const StatusIcon = cfg.icon
+            const isExpanded = expandedId === app.id
+
+            return (
+              <motion.div
+                key={app.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ delay: i * 0.04 }}
+              >
+                <div
+                  style={{
+                    background: C.card,
+                    border: `1px solid ${isExpanded ? C.borderHov : C.border}`,
+                    borderRadius: C.r, overflow: 'hidden', transition: 'all 0.2s',
+                  }}
+                >
+                  {/* Main row */}
+                  <div
+                    onClick={() => setExpandedId(isExpanded ? null : app.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer', transition: 'background 0.15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = C.cardHov)}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    {/* Logo */}
+                    <div style={{ width: '38px', height: '38px', borderRadius: '9px', background: `${app.color}20`, border: `1px solid ${app.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10.5px', fontWeight: 700, color: app.color, flexShrink: 0 }}>
+                      {app.init}
+                    </div>
+
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '13.5px', fontWeight: 700, color: C.text }}>{app.role}</span>
+                        <span style={{ fontSize: '10.5px', fontWeight: 600, padding: '2px 8px', borderRadius: '20px', color: cfg.color, background: cfg.bg, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <StatusIcon size={10} color={cfg.color} />{app.status}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: C.sub, display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                        {app.company}
+                        <span style={{ color: C.border }}>·</span>
+                        <MapPin size={10} color={C.muted} />{app.loc}
+                        <span style={{ color: C.border }}>·</span>
+                        {app.salary}
+                      </div>
+                    </div>
+
+                    {/* Date + chevron */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                      <div style={{ fontSize: '11px', color: C.muted, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                        <Calendar size={10} color={C.muted} />{app.applied}
+                      </div>
+                      <ChevronRight
+                        size={14} color={C.muted}
+                        style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Expanded detail */}
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22 }}
+                        style={{ overflow: 'hidden' }}
+                      >
+                        <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${C.border}`, paddingTop: '14px' }}>
+
+                          {/* Notes box */}
+                          <div style={{ padding: '11px 14px', borderRadius: C.rSm, background: C.purpleDim, border: `1px solid rgba(108,99,255,0.2)`, marginBottom: '12px' }}>
+                            <p style={{ fontSize: '11px', fontWeight: 600, color: C.purple, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Notes</p>
+                            <p style={{ fontSize: '12.5px', color: C.sub, margin: 0, lineHeight: 1.6 }}>{app.notes}</p>
+                          </div>
+
+                          {/* Offer highlight */}
+                          {app.status === 'Offer' && (
+                            <div style={{ padding: '10px 14px', borderRadius: C.rSm, background: C.greenDim, border: `1px solid rgba(16,185,129,0.25)`, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <CheckCircle2 size={14} color={C.green} />
+                              <p style={{ fontSize: '12.5px', color: C.green, margin: 0, fontWeight: 600 }}>
+                                Congratulations! You have a job offer. Review and respond before the deadline.
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Interview highlight */}
+                          {app.status === 'Interview' && (
+                            <div style={{ padding: '10px 14px', borderRadius: C.rSm, background: C.cyanDim, border: `1px solid rgba(6,182,212,0.25)`, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <Calendar size={14} color={C.cyan} />
+                              <p style={{ fontSize: '12.5px', color: C.cyan, margin: 0, fontWeight: 600 }}>
+                                Interview scheduled — check your email for the meeting link and prep materials.
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Action buttons */}
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <button
+                              onClick={() => toast.info('Opening job details — coming soon!')}
+                              style={{ padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `1px solid ${C.border}`, color: C.sub, fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                            >
+                              <FileText size={12} /> View Job
+                            </button>
+                            <button
+                              onClick={() => toast.info('Opening messages — coming soon!')}
+                              style={{ padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `1px solid ${C.border}`, color: C.sub, fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                            >
+                              <MessageSquare size={12} /> Message HR
+                            </button>
+                            {app.status === 'Offer' && (
+                              <button
+                                onClick={() => toast.success('Accepting offer — coming soon!')}
+                                style={{ padding: '7px 14px', borderRadius: '8px', background: C.green, border: 'none', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                              >
+                                <CheckCircle2 size={12} /> Accept Offer
+                              </button>
+                            )}
+                            {app.status === 'Rejected' && (
+                              <button
+                                onClick={() => router.push('/seeker/opportunities')}
+                                style={{ padding: '7px 14px', borderRadius: '8px', background: C.purple, border: 'none', color: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                              >
+                                <Briefcase size={12} /> Find Similar
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            )
+          })}
+        </AnimatePresence>
+      </div>
+
+      <style>{`input::placeholder { color: #475569; }`}</style>
     </div>
   )
 }
