@@ -1,265 +1,678 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Settings, Bell, Shield, Briefcase, Palette, AlertTriangle,
+  Mail, Smartphone, MessageSquare, Lock,
+  MapPin, Monitor, Trash2, ChevronDown, ChevronUp,
+  CheckCircle, User, Globe, Laptop,
+  Building2
+} from 'lucide-react'
 import { toast } from 'sonner'
 
-export default function SettingsPage() {
-  const [tab, setTab] = useState<'account' | 'notifications' | 'privacy'>('account')
-  const [user, setUser] = useState<any>(null)
-  const [profile, setProfile] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '' })
-  const [passwords, setPasswords] = useState({ current: '', newPass: '', confirm: '' })
-  const [notifications, setNotifications] = useState({ email_jobs: true, email_messages: true, email_status: true, push_all: false })
-  const supabase = createClient()
+const C = {
+  bg: '#0a0a0f', card: '#111118', cardHov: '#14141c',
+  border: '#1e1e2e', borderHov: '#2d2d44',
+  purple: '#6c63ff', purpleDim: 'rgba(108,99,255,0.12)',
+  cyan: '#06b6d4', cyanDim: 'rgba(6,182,212,0.12)',
+  green: '#10b981', greenDim: 'rgba(16,185,129,0.12)',
+  amber: '#f59e0b', amberDim: 'rgba(245,158,11,0.12)',
+  red: '#ef4444', redDim: 'rgba(239,68,68,0.12)',
+  text: '#f8fafc', sub: '#94a3b8', muted: '#475569',
+  r: '14px', rSm: '10px',
+}
 
-  useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
-      if (user) {
-        const { data } = await supabase.from('profiles').select('*').eq('user_id', user.id).single()
-        if (data) {
-          setProfile(data)
-          const parts = (data.full_name || '').split(' ')
-          setForm({
-            firstName: parts[0] || '',
-            lastName: parts.slice(1).join(' ') || '',
-            email: user.email || '',
-            phone: data.phone || '',
-          })
-        } else {
-          const name = user.user_metadata?.full_name || user.email?.split('@')[0] || ''
-          const parts = name.split(' ')
-          setForm({ firstName: parts[0] || '', lastName: parts.slice(1).join(' ') || '', email: user.email || '', phone: '' })
-        }
-      }
-      setLoading(false)
-    }
-    load()
-  }, [])
-
-  const saveProfile = async () => {
-    if (!user) return
-    setSaving(true)
-    try {
-      await supabase.from('profiles').upsert({
-        user_id: user.id,
-        full_name: `${form.firstName} ${form.lastName}`.trim(),
-        phone: form.phone,
-      })
-      toast.success('Profile updated successfully!')
-    } catch {
-      toast.error('Failed to save changes')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const updatePassword = async () => {
-    if (passwords.newPass !== passwords.confirm) { toast.error('Passwords do not match'); return }
-    if (passwords.newPass.length < 8) { toast.error('Password must be at least 8 characters'); return }
-    setSaving(true)
-    try {
-      const { error } = await supabase.auth.updateUser({ password: passwords.newPass })
-      if (error) throw error
-      toast.success('Password updated successfully!')
-      setPasswords({ current: '', newPass: '', confirm: '' })
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to update password')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const deleteAccount = async () => {
-    if (!confirm('This will permanently delete your account and all data. This cannot be undone.')) return
-    toast.error('Please contact support@lyu.in to delete your account.')
-  }
-
-  const inputStyle = (focus?: boolean) => ({
-    width: '100%', padding: '11px 14px', borderRadius: 11, border: '1.5px solid #e2e8f0',
-    fontSize: 14, color: '#0f172a', background: 'white', fontFamily: 'inherit', outline: 'none',
-    boxSizing: 'border-box' as const, transition: 'border-color 0.15s',
-  })
-
-  const tabStyle = (active: boolean) => ({
-    padding: '10px 20px', borderRadius: 9, fontSize: 13, fontWeight: active ? 700 : 500,
-    cursor: 'pointer', border: 'none', fontFamily: 'inherit', transition: 'all 0.15s',
-    background: active ? 'white' : 'transparent', color: active ? '#0f172a' : '#64748b',
-    boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-  })
-
+function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 680, fontFamily: 'Inter, system-ui, sans-serif', paddingBottom: 40 }}>
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.02em' }}>Settings</h1>
-        <p style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>Manage your account and preferences</p>
-      </div>
+    <button
+      onClick={() => onChange(!on)}
+      style={{
+        width: '44px', height: '24px', borderRadius: '99px', border: 'none',
+        background: on ? C.purple : C.border,
+        cursor: 'pointer', position: 'relative',
+        transition: 'background 0.25s', flexShrink: 0,
+        padding: 0,
+      }}
+    >
+      <motion.div
+        animate={{ x: on ? 22 : 2 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+        style={{
+          position: 'absolute', top: '2px',
+          width: '20px', height: '20px', borderRadius: '50%',
+          background: '#fff',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+        }}
+      />
+    </button>
+  )
+}
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 2, background: '#f1f5f9', borderRadius: 12, padding: 4, width: 'fit-content' }}>
-        {(['account', 'notifications', 'privacy'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={tabStyle(tab === t)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-          </button>
+function SectionCard({
+  title, icon, iconColor, children, expanded, onToggle, isMobile,
+}: {
+  title: string; icon: React.ReactNode; iconColor: string
+  children: React.ReactNode; expanded: boolean; onToggle: () => void; isMobile: boolean
+}) {
+  const [hov, setHov] = useState(false)
+  return (
+    <div
+      style={{
+        background: C.card, border: `1px solid ${hov ? C.borderHov : C.border}`,
+        borderRadius: C.r, overflow: 'hidden', transition: 'border-color 0.2s',
+      }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      <button
+        onClick={onToggle}
+        style={{
+          width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+          padding: isMobile ? '14px' : '16px 20px',
+          display: 'flex', alignItems: 'center', gap: '12px', textAlign: 'left',
+        }}
+      >
+        <div style={{
+          width: '36px', height: '36px', borderRadius: '10px',
+          background: `${iconColor}18`, border: `1px solid ${iconColor}35`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          {icon}
+        </div>
+        <span style={{ flex: 1, fontSize: '14px', fontWeight: 600, color: C.text }}>{title}</span>
+        {expanded
+          ? <ChevronUp size={16} color={C.muted} />
+          : <ChevronDown size={16} color={C.muted} />
+        }
+      </button>
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22 }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div style={{
+              borderTop: `1px solid ${C.border}`,
+              padding: isMobile ? '16px 14px' : '20px',
+            }}>
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function ToggleRow({
+  label, sub, on, onChange,
+}: { label: string; sub?: string; on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      gap: '16px', padding: '10px 0',
+    }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: '13px', fontWeight: 500, color: C.text }}>{label}</div>
+        {sub && <div style={{ fontSize: '11px', color: C.muted, marginTop: '2px' }}>{sub}</div>}
+      </div>
+      <Toggle on={on} onChange={onChange} />
+    </div>
+  )
+}
+
+function Divider() {
+  return <div style={{ height: '1px', background: C.border, margin: '2px 0' }} />
+}
+
+function SelectField({
+  label, value, onChange, options,
+}: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+      <label style={{ fontSize: '11px', fontWeight: 600, color: C.sub, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {label}
+      </label>
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          background: C.bg, border: `1px solid ${C.border}`, borderRadius: C.rSm,
+          padding: '9px 12px', color: C.text, fontSize: '13px', outline: 'none',
+          fontFamily: 'inherit', cursor: 'pointer', appearance: 'none',
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center',
+          paddingRight: '36px',
+        }}
+      >
+        {options.map(o => <option key={o} value={o} style={{ background: C.card }}>{o}</option>)}
+      </select>
+    </div>
+  )
+}
+
+function TagSelect({
+  label, options, selected, onChange,
+}: { label: string; options: string[]; selected: string[]; onChange: (v: string[]) => void }) {
+  function toggle(o: string) {
+    onChange(selected.includes(o) ? selected.filter(x => x !== o) : [...selected, o])
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <label style={{ fontSize: '11px', fontWeight: 600, color: C.sub, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {label}
+      </label>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px' }}>
+        {options.map(o => {
+          const active = selected.includes(o)
+          return (
+            <button
+              key={o}
+              onClick={() => toggle(o)}
+              style={{
+                padding: '5px 12px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer',
+                background: active ? C.purpleDim : C.bg,
+                border: `1px solid ${active ? C.purple : C.border}`,
+                color: active ? C.purple : C.sub,
+                fontWeight: active ? 600 : 400,
+                transition: 'all 0.15s',
+              }}
+            >
+              {o}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function SalarySlider({
+  value, onChange,
+}: { value: [number, number]; onChange: (v: [number, number]) => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <label style={{ fontSize: '11px', fontWeight: 600, color: C.sub, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Expected Salary Range
+        </label>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: C.purple }}>
+          ₹{value[0]}L – ₹{value[1]}L
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        {(['Min', 'Max'] as const).map((label, i) => (
+          <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '11px', color: C.muted }}>{label} (LPA)</span>
+            <input
+              type="range" min={1} max={i === 0 ? value[1] - 1 : 100}
+              value={value[i]}
+              onChange={e => {
+                const n = Number(e.target.value)
+                onChange(i === 0 ? [n, value[1]] : [value[0], n])
+              }}
+              style={{ width: '100%', accentColor: C.purple, cursor: 'pointer' }}
+            />
+          </div>
         ))}
       </div>
+    </div>
+  )
+}
 
-      {tab === 'account' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+function SubLabel({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '6px',
+      fontSize: '11px', fontWeight: 700, color: C.sub,
+      textTransform: 'uppercase', letterSpacing: '0.06em',
+      padding: '6px 0 2px',
+    }}>
+      {icon}{label}
+    </div>
+  )
+}
 
-          {/* Account info */}
-          <div style={{ background: 'white', borderRadius: 16, border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <h2 style={{ fontWeight: 800, color: '#0f172a', fontSize: 15, marginBottom: 20 }}>Account Information</h2>
+function SaveBtn({ onClick }: { onClick: () => void }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: '6px',
+        padding: '9px 20px', borderRadius: '9px', border: 'none',
+        background: hov ? '#5a52e0' : C.purple,
+        color: '#fff', fontSize: '13px', fontWeight: 600,
+        cursor: 'pointer', transition: 'background 0.2s',
+      }}
+    >
+      <CheckCircle size={14} /> Save
+    </button>
+  )
+}
 
-            {loading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} style={{ height: 44, borderRadius: 11, background: 'linear-gradient(90deg,#f1f5f9 25%,#e8edf2 50%,#f1f5f9 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }} />
-                ))}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }} className="settings-grid">
-                  <div>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 7 }}>First Name</label>
-                    <input value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} placeholder="Your first name"
-                      style={inputStyle()} onFocus={e => e.target.style.borderColor = '#2563eb'} onBlur={e => e.target.style.borderColor = '#e2e8f0'} />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 7 }}>Last Name</label>
-                    <input value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} placeholder="Your last name"
-                      style={inputStyle()} onFocus={e => e.target.style.borderColor = '#2563eb'} onBlur={e => e.target.style.borderColor = '#e2e8f0'} />
-                  </div>
-                </div>
+export default function SettingsPage() {
+  const [vw, setVw] = useState(1280)
+  useEffect(() => {
+    const update = () => setVw(window.innerWidth)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+  const isMobile = vw < 640
+  const isTablet = vw >= 640 && vw < 1100
+  const pad = isMobile ? '14px' : isTablet ? '20px 22px' : '22px 26px'
 
-                <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 7 }}>Email Address</label>
-                  <div style={{ position: 'relative' }}>
-                    <input value={form.email} disabled placeholder="Email"
-                      style={{ ...inputStyle(), background: '#f8fafc', color: '#94a3b8', paddingRight: 90 }} />
-                    {user?.email_confirmed_at && (
-                      <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', padding: '3px 9px', borderRadius: 9999, border: '1px solid #bbf7d0' }}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                        Verified
-                      </span>
-                    )}
-                  </div>
-                  <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 5 }}>Email cannot be changed here. Contact support if needed.</p>
-                </div>
+  const [open, setOpen] = useState<Record<string, boolean>>({
+    account: true, notifications: false, privacy: false,
+    preferences: false, appearance: false, danger: false,
+  })
+  function toggle(s: string) { setOpen(o => ({ ...o, [s]: !o[s] })) }
 
-                <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 7 }}>Phone Number</label>
-                  <input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+91 XXXXX XXXXX"
-                    style={inputStyle()} onFocus={e => e.target.style.borderColor = '#2563eb'} onBlur={e => e.target.style.borderColor = '#e2e8f0'} />
-                </div>
+  const [email] = useState('arjun.sharma@gmail.com')
+  const [hovPass, setHovPass] = useState(false)
 
-                <button onClick={saveProfile} disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: saving ? '#93c5fd' : '#2563eb', color: 'white', border: 'none', borderRadius: 11, padding: '11px 22px', fontWeight: 700, fontSize: 14, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start', transition: 'all 0.15s' }}>
-                  {saving ? (
-                    <><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg> Saving...</>
-                  ) : (
-                    <><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Changes</>
-                  )}
-                </button>
-              </div>
-            )}
+  const [notifs, setNotifs] = useState({
+    emailJobs: true, emailApplications: true, emailMessages: false,
+    pushJobs: true, pushApplications: true, pushMessages: true,
+    smsOtp: true, smsAlerts: false,
+    weeklyDigest: true, marketingEmails: false,
+  })
+  function setNotif(k: keyof typeof notifs, v: boolean) {
+    setNotifs(n => ({ ...n, [k]: v }))
+  }
+
+  const [privacy, setPrivacy] = useState({
+    profilePublic: true, showEmail: false, showPhone: false,
+    allowRecruiterContact: true, shareActivityData: false,
+    showOnlineStatus: true,
+  })
+  function setPriv(k: keyof typeof privacy, v: boolean) {
+    setPrivacy(p => ({ ...p, [k]: v }))
+  }
+
+  const [jobType, setJobType] = useState<string[]>(['Full-time'])
+  const [workMode, setWorkMode] = useState<string[]>(['Remote', 'Hybrid'])
+  const [locations, setLocations] = useState<string[]>(['Bangalore', 'Mumbai'])
+  const [salaryRange, setSalaryRange] = useState<[number, number]>([8, 25])
+  const [experience, setExperience] = useState('2-5 years')
+  const [industry, setIndustry] = useState('Technology')
+  const [noticePeriod, setNoticePeriod] = useState('Immediately')
+
+  const [deleteHov, setDeleteHov] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+
+  function save(section: string) {
+    toast.success(`${section} settings saved!`)
+  }
+
+  function handleDeleteAccount() {
+    if (!deleteConfirm) {
+      setDeleteConfirm(true)
+      toast.warning('Click "Delete Account" again to permanently delete your account.')
+      setTimeout(() => setDeleteConfirm(false), 5000)
+    } else {
+      toast.error('Account deletion is disabled in demo mode.')
+      setDeleteConfirm(false)
+    }
+  }
+
+  return (
+    <div style={{ minHeight: '100%', background: C.bg, padding: pad, fontFamily: 'system-ui, sans-serif' }}>
+
+      {/* Header */}
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+          <div style={{
+            width: '36px', height: '36px', borderRadius: '10px',
+            background: C.purpleDim, border: `1px solid ${C.purple}40`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Settings size={17} color={C.purple} />
           </div>
+          <div>
+            <h1 style={{ margin: 0, fontSize: isMobile ? '18px' : '22px', fontWeight: 700, color: C.text }}>Settings</h1>
+            <p style={{ margin: 0, fontSize: '12px', color: C.sub }}>Manage your account, notifications, and preferences</p>
+          </div>
+        </div>
+      </div>
 
-          {/* Change password */}
-          <div style={{ background: 'white', borderRadius: 16, border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <h2 style={{ fontWeight: 800, color: '#0f172a', fontSize: 15, marginBottom: 20 }}>Change Password</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {[
-                { label: 'New Password', key: 'newPass', placeholder: 'Min. 8 characters' },
-                { label: 'Confirm New Password', key: 'confirm', placeholder: 'Repeat new password' },
-              ].map(field => (
-                <div key={field.key}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 7 }}>{field.label}</label>
-                  <input type="password" value={passwords[field.key as keyof typeof passwords]} onChange={e => setPasswords(p => ({ ...p, [field.key]: e.target.value }))} placeholder={field.placeholder}
-                    style={inputStyle()} onFocus={e => e.target.style.borderColor = '#2563eb'} onBlur={e => e.target.style.borderColor = '#e2e8f0'} />
-                </div>
-              ))}
-              <button onClick={updatePassword} disabled={saving || !passwords.newPass} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: (!passwords.newPass || saving) ? '#e2e8f0' : '#0f172a', color: (!passwords.newPass || saving) ? '#94a3b8' : 'white', border: 'none', borderRadius: 11, padding: '11px 22px', fontWeight: 700, fontSize: 14, cursor: (!passwords.newPass || saving) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start', transition: 'all 0.15s' }}>
-                Update Password
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+        {/* Account */}
+        <SectionCard title="Account" icon={<User size={17} color={C.purple} />} iconColor={C.purple}
+          expanded={open.account} onToggle={() => toggle('account')} isMobile={isMobile}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{
+              background: C.bg, border: `1px solid ${C.border}`, borderRadius: C.rSm,
+              padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
+            }}>
+              <div>
+                <div style={{ fontSize: '11px', color: C.muted, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</div>
+                <div style={{ fontSize: '14px', fontWeight: 500, color: C.text }}>{email}</div>
+              </div>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                background: C.greenDim, border: `1px solid ${C.green}30`,
+                borderRadius: '20px', padding: '3px 10px',
+                fontSize: '11px', color: C.green, fontWeight: 600,
+              }}>
+                <CheckCircle size={11} fill={C.green} /> Verified
+              </div>
+            </div>
+
+            <div style={{
+              background: C.bg, border: `1px solid ${C.border}`, borderRadius: C.rSm, padding: '14px',
+            }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: C.text, marginBottom: '4px' }}>Password</div>
+              <div style={{ fontSize: '12px', color: C.muted, marginBottom: '12px' }}>
+                Last changed 3 months ago. We recommend updating it regularly.
+              </div>
+              <button
+                onMouseEnter={() => setHovPass(true)}
+                onMouseLeave={() => setHovPass(false)}
+                onClick={() => toast.info('Password reset link sent to your email!')}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '8px 16px', borderRadius: '8px',
+                  background: hovPass ? C.purpleDim : C.bg,
+                  border: `1px solid ${hovPass ? C.purple : C.border}`,
+                  color: hovPass ? C.purple : C.sub,
+                  fontSize: '13px', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s',
+                }}
+              >
+                <Lock size={13} /> Change Password
               </button>
             </div>
-          </div>
 
-          {/* Danger zone */}
-          <div style={{ background: '#fef2f2', borderRadius: 16, border: '1px solid #fecaca', padding: '20px 24px' }}>
-            <h2 style={{ fontWeight: 800, color: '#b91c1c', fontSize: 14, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 7 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              Danger Zone
-            </h2>
-            <p style={{ fontSize: 13, color: '#dc2626', marginBottom: 14 }}>Deleting your account is permanent and cannot be undone.</p>
-            <button onClick={deleteAccount} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'white', color: '#dc2626', border: '1.5px solid #fca5a5', borderRadius: 10, padding: '9px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-              Delete My Account
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <SaveBtn onClick={() => save('Account')} />
+            </div>
           </div>
-        </div>
-      )}
+        </SectionCard>
 
-      {tab === 'notifications' && (
-        <div style={{ background: 'white', borderRadius: 16, border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <h2 style={{ fontWeight: 800, color: '#0f172a', fontSize: 15, marginBottom: 20 }}>Notification Preferences</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {[
-              { key: 'email_jobs', label: 'New job matches', desc: 'Get emailed when new jobs match your skills', section: 'Email' },
-              { key: 'email_messages', label: 'New messages', desc: 'Get emailed when an employer messages you' },
-              { key: 'email_status', label: 'Application updates', desc: 'Get emailed when your application status changes' },
-              { key: 'push_all', label: 'Push notifications', desc: 'Browser notifications for all activity', section: 'Browser' },
-            ].map((item, i, arr) => (
-              <div key={item.key}>
-                {item.section && (
-                  <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginTop: i > 0 ? 20 : 0, marginBottom: 12 }}>{item.section}</p>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: i < arr.length - 1 ? '1px solid #f8fafc' : 'none' }}>
-                  <div>
-                    <p style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>{item.label}</p>
-                    <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{item.desc}</p>
+        {/* Notifications */}
+        <SectionCard title="Notifications" icon={<Bell size={17} color={C.amber} />} iconColor={C.amber}
+          expanded={open.notifications} onToggle={() => toggle('notifications')} isMobile={isMobile}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <SubLabel icon={<Mail size={12} color={C.purple} />} label="Email Notifications" />
+            <ToggleRow label="New Job Recommendations" sub="Get jobs matching your profile" on={notifs.emailJobs} onChange={v => setNotif('emailJobs', v)} />
+            <Divider />
+            <ToggleRow label="Application Status Updates" sub="When your status changes" on={notifs.emailApplications} onChange={v => setNotif('emailApplications', v)} />
+            <Divider />
+            <ToggleRow label="New Messages from Recruiters" on={notifs.emailMessages} onChange={v => setNotif('emailMessages', v)} />
+            <Divider />
+            <ToggleRow label="Weekly Career Digest" sub="Job market insights every Monday" on={notifs.weeklyDigest} onChange={v => setNotif('weeklyDigest', v)} />
+            <Divider />
+            <ToggleRow label="Marketing & Offers" sub="Promotions, webinars, new features" on={notifs.marketingEmails} onChange={v => setNotif('marketingEmails', v)} />
+
+            <div style={{ height: '12px' }} />
+            <SubLabel icon={<Smartphone size={12} color={C.cyan} />} label="Push Notifications" />
+            <ToggleRow label="Job Alerts" on={notifs.pushJobs} onChange={v => setNotif('pushJobs', v)} />
+            <Divider />
+            <ToggleRow label="Application Updates" on={notifs.pushApplications} onChange={v => setNotif('pushApplications', v)} />
+            <Divider />
+            <ToggleRow label="Chat Messages" on={notifs.pushMessages} onChange={v => setNotif('pushMessages', v)} />
+
+            <div style={{ height: '12px' }} />
+            <SubLabel icon={<MessageSquare size={12} color={C.green} />} label="SMS Notifications" />
+            <ToggleRow label="OTP & Login Alerts" sub="Always enabled for security" on={notifs.smsOtp} onChange={() => toast.info('OTP alerts cannot be disabled.')} />
+            <Divider />
+            <ToggleRow label="Interview Reminders via SMS" on={notifs.smsAlerts} onChange={v => setNotif('smsAlerts', v)} />
+
+            <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+              <SaveBtn onClick={() => save('Notification')} />
+            </div>
+          </div>
+        </SectionCard>
+
+        {/* Privacy */}
+        <SectionCard title="Privacy" icon={<Shield size={17} color={C.green} />} iconColor={C.green}
+          expanded={open.privacy} onToggle={() => toggle('privacy')} isMobile={isMobile}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <ToggleRow label="Public Profile" sub="Recruiters and companies can find you" on={privacy.profilePublic} onChange={v => setPriv('profilePublic', v)} />
+            <Divider />
+            <ToggleRow label="Show Email on Profile" sub="Visible to verified recruiters only" on={privacy.showEmail} onChange={v => setPriv('showEmail', v)} />
+            <Divider />
+            <ToggleRow label="Show Phone Number" on={privacy.showPhone} onChange={v => setPriv('showPhone', v)} />
+            <Divider />
+            <ToggleRow label="Allow Recruiter Direct Contact" sub="Recruiters can send you messages" on={privacy.allowRecruiterContact} onChange={v => setPriv('allowRecruiterContact', v)} />
+            <Divider />
+            <ToggleRow label="Show Online Status" sub="Let recruiters see when you are active" on={privacy.showOnlineStatus} onChange={v => setPriv('showOnlineStatus', v)} />
+            <Divider />
+            <ToggleRow label="Share Activity Data for Improvements" sub="Anonymous usage data to improve LYU" on={privacy.shareActivityData} onChange={v => setPriv('shareActivityData', v)} />
+            <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+              <SaveBtn onClick={() => save('Privacy')} />
+            </div>
+          </div>
+        </SectionCard>
+
+        {/* Job Preferences */}
+        <SectionCard title="Job Preferences" icon={<Briefcase size={17} color={C.cyan} />} iconColor={C.cyan}
+          expanded={open.preferences} onToggle={() => toggle('preferences')} isMobile={isMobile}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <TagSelect
+              label="Job Type"
+              options={['Full-time', 'Part-time', 'Contract', 'Internship', 'Freelance']}
+              selected={jobType}
+              onChange={setJobType}
+            />
+            <TagSelect
+              label="Work Mode"
+              options={['Remote', 'Hybrid', 'In-office', 'Flexible']}
+              selected={workMode}
+              onChange={setWorkMode}
+            />
+            <TagSelect
+              label="Preferred Locations"
+              options={['Bangalore', 'Mumbai', 'Delhi NCR', 'Hyderabad', 'Pune', 'Chennai', 'Kolkata', 'Pan India']}
+              selected={locations}
+              onChange={setLocations}
+            />
+            <SalarySlider value={salaryRange} onChange={setSalaryRange} />
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px' }}>
+              <SelectField
+                label="Experience Level"
+                value={experience}
+                onChange={setExperience}
+                options={['Fresher (0-1 year)', '1-2 years', '2-5 years', '5-10 years', '10+ years']}
+              />
+              <SelectField
+                label="Industry"
+                value={industry}
+                onChange={setIndustry}
+                options={['Technology', 'Finance / Fintech', 'E-commerce', 'Healthcare', 'EdTech', 'Government / PSU', 'Consulting', 'Other']}
+              />
+            </div>
+            <SelectField
+              label="Notice Period / Availability"
+              value={noticePeriod}
+              onChange={setNoticePeriod}
+              options={['Immediately', '15 days', '30 days', '60 days', '90 days', 'Currently employed']}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <SaveBtn onClick={() => save('Job Preferences')} />
+            </div>
+          </div>
+        </SectionCard>
+
+        {/* Appearance */}
+        <SectionCard title="Appearance" icon={<Palette size={17} color={C.purple} />} iconColor={C.purple}
+          expanded={open.appearance} onToggle={() => toggle('appearance')} isMobile={isMobile}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: C.sub, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '10px' }}>
+                Theme
+              </label>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {[
+                  { label: 'Dark', icon: <Monitor size={16} />, active: true },
+                  { label: 'Light', icon: <Monitor size={16} />, active: false },
+                  { label: 'System', icon: <Laptop size={16} />, active: false },
+                ].map(t => (
+                  <button
+                    key={t.label}
+                    onClick={() => t.label !== 'Dark' && toast.info('Only Dark theme is available in this version.')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '10px 16px', borderRadius: '10px', cursor: 'pointer',
+                      background: t.active ? C.purpleDim : C.bg,
+                      border: `2px solid ${t.active ? C.purple : C.border}`,
+                      color: t.active ? C.purple : C.sub,
+                      fontSize: '13px', fontWeight: t.active ? 600 : 400,
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {t.icon} {t.label}
+                    {t.active && (
+                      <span style={{
+                        fontSize: '10px', background: C.purple, color: '#fff',
+                        padding: '1px 6px', borderRadius: '99px', marginLeft: '2px',
+                      }}>Active</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{
+              background: C.bg, border: `1px solid ${C.border}`, borderRadius: C.rSm,
+              padding: '14px', display: 'flex', alignItems: 'center', gap: '14px',
+            }}>
+              <div style={{
+                width: '48px', height: '48px', borderRadius: '10px',
+                background: C.purpleDim, border: `1px solid ${C.purple}40`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                <Palette size={22} color={C.purple} />
+              </div>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: C.text, marginBottom: '2px' }}>
+                  LYU Dark Theme
+                </div>
+                <div style={{ fontSize: '11px', color: C.muted }}>
+                  Deep navy background · Purple & cyan accents · Optimized for late-night job hunting
+                </div>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
+
+        {/* Danger Zone */}
+        <SectionCard title="Danger Zone" icon={<AlertTriangle size={17} color={C.red} />} iconColor={C.red}
+          expanded={open.danger} onToggle={() => toggle('danger')} isMobile={isMobile}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{
+              background: C.bg, border: `1px solid ${C.border}`, borderRadius: C.rSm,
+              padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              flexWrap: 'wrap', gap: '12px',
+            }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: C.text, marginBottom: '3px' }}>Deactivate Account</div>
+                <div style={{ fontSize: '12px', color: C.muted }}>
+                  Temporarily hide your profile. You can reactivate anytime.
+                </div>
+              </div>
+              <button
+                onClick={() => toast.warning('Account deactivation is disabled in demo mode.')}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', border: `1px solid ${C.border}`,
+                  background: C.bg, color: C.sub, fontSize: '12px', fontWeight: 500,
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                Deactivate
+              </button>
+            </div>
+
+            <div style={{
+              background: C.bg, border: `1px solid ${C.border}`, borderRadius: C.rSm,
+              padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              flexWrap: 'wrap', gap: '12px',
+            }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: C.text, marginBottom: '3px' }}>Download My Data</div>
+                <div style={{ fontSize: '12px', color: C.muted }}>
+                  Export all your profile, applications, and messages as a ZIP file.
+                </div>
+              </div>
+              <button
+                onClick={() => toast.info('Your data export has been queued. We will email you within 24 hours.')}
+                style={{
+                  padding: '8px 16px', borderRadius: '8px', border: `1px solid ${C.border}`,
+                  background: C.bg, color: C.sub, fontSize: '12px', fontWeight: 500,
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                Export Data
+              </button>
+            </div>
+
+            <div style={{
+              background: C.redDim, border: `1px solid ${C.red}35`, borderRadius: C.rSm,
+              padding: '16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '12px' }}>
+                <AlertTriangle size={16} color={C.red} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: C.red, marginBottom: '4px' }}>
+                    Delete Account Permanently
                   </div>
-                  <div onClick={() => setNotifications(n => ({ ...n, [item.key]: !n[item.key as keyof typeof n] }))}
-                    style={{ width: 44, height: 24, borderRadius: 12, background: notifications[item.key as keyof typeof notifications] ? '#22c55e' : '#e2e8f0', position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }}>
-                    <div style={{ position: 'absolute', top: 3, left: notifications[item.key as keyof typeof notifications] ? 22 : 3, width: 18, height: 18, background: 'white', borderRadius: '50%', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'left 0.2s' }} />
+                  <div style={{ fontSize: '12px', color: C.sub, lineHeight: 1.6 }}>
+                    This will permanently delete your account, profile, all applications, saved jobs, messages, and career AI history.{' '}
+                    <strong style={{ color: C.text }}>This action cannot be undone.</strong>
                   </div>
                 </div>
               </div>
-            ))}
+              <motion.button
+                onClick={handleDeleteAccount}
+                onHoverStart={() => setDeleteHov(true)}
+                onHoverEnd={() => setDeleteHov(false)}
+                whileTap={{ scale: 0.97 }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '7px',
+                  padding: '10px 20px', borderRadius: '9px', border: 'none',
+                  background: deleteConfirm ? C.red : (deleteHov ? '#dc2626' : '#b91c1c'),
+                  color: '#fff', fontSize: '13px', fontWeight: 700,
+                  cursor: 'pointer', transition: 'background 0.2s',
+                  boxShadow: deleteHov ? `0 0 0 3px ${C.redDim}` : 'none',
+                }}
+              >
+                <Trash2 size={14} />
+                {deleteConfirm ? 'Confirm — Delete My Account' : 'Delete Account'}
+              </motion.button>
+              {deleteConfirm && (
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  style={{ margin: '8px 0 0', fontSize: '11px', color: C.red }}
+                >
+                  ⚠ Click again to confirm. This is irreversible.
+                </motion.p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        </SectionCard>
 
-      {tab === 'privacy' && (
-        <div style={{ background: 'white', borderRadius: 16, border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          <h2 style={{ fontWeight: 800, color: '#0f172a', fontSize: 15, marginBottom: 8 }}>Privacy Settings</h2>
-          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 24, lineHeight: 1.6 }}>Control who can see your profile and how your data is used.</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {[
-              { label: 'Profile visibility', desc: 'Who can see your profile', options: ['Public', 'Employers only', 'Private'] },
-              { label: 'Contact visibility', desc: 'Who can message you', options: ['All employers', 'Verified only', 'Nobody'] },
-            ].map(item => (
-              <div key={item.label} style={{ padding: '16px', background: '#f8fafc', borderRadius: 12, border: '1px solid #f1f5f9' }}>
-                <p style={{ fontWeight: 700, color: '#0f172a', fontSize: 14, marginBottom: 4 }}>{item.label}</p>
-                <p style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>{item.desc}</p>
-                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                  {item.options.map((opt, i) => (
-                    <button key={opt} style={{ padding: '6px 14px', borderRadius: 9999, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: 'none', background: i === 1 ? '#2563eb' : '#e2e8f0', color: i === 1 ? 'white' : '#475569' }}>{opt}</button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      </div>
 
       <style>{`
-        @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
-        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-        @media(max-width:640px) { .settings-grid { grid-template-columns: 1fr !important; } }
+        select option { background: ${C.card}; color: ${C.text}; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 99px; }
       `}</style>
     </div>
   )
