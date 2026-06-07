@@ -17,15 +17,30 @@ export default function RegisterPage() {
 
   const supabase = createClient();
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) router.replace('/seeker/dashboard');
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) router.replace('/seeker/dashboard');
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   const handleGoogleRegister = async () => {
     setGoogleLoading(true);
     setError('');
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${location.origin}/auth/callback` },
-    });
-    if (error) {
-      setError(error.message);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/auth/callback`, queryParams: { access_type: 'offline', prompt: 'consent' } },
+      });
+      if (error) {
+        setError(error.message);
+        setGoogleLoading(false);
+      }
+    } catch (e) {
+      setError('Failed to connect. Check your internet connection.');
       setGoogleLoading(false);
     }
   };
@@ -34,18 +49,21 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-      },
-    });
-    if (error) {
-      setError(error.message);
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: fullName } },
+      });
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+      } else {
+        router.replace('/auth/onboarding');
+      }
+    } catch (e) {
+      setError('Failed to connect. Check your internet connection and try again.');
       setLoading(false);
-    } else {
-      router.replace('/auth/onboarding');
     }
   };
 
