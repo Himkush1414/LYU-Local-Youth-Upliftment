@@ -1,549 +1,687 @@
-'use client';
+'use client'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { motion, AnimatePresence } from 'framer-motion'
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+const supabase = createClientComponentClient()
 
-type Role = 'seeker' | 'recruiter' | null;
+// ── Icons ──────────────────────────────────────────────────────────────────
+const IconBriefcase = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7">
+    <rect x="2" y="7" width="20" height="14" rx="2" />
+    <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+    <line x1="12" y1="12" x2="12" y2="12.01" />
+  </svg>
+)
 
-// ─── Step types ───────────────────────────────────────────────────────────────
-interface SeekerData {
-  headline: string;
-  currentStatus: string;
-  experience: string;
-  skills: string[];
-  education: string;
-  preferredRoles: string[];
-  workMode: string[];
-  location: string;
-  expectedSalary: string;
-  openToOpportunities: string;
+const IconBuilding = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7">
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </svg>
+)
+
+const IconCheck = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+)
+
+const IconX = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+)
+
+const IconArrow = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+  </svg>
+)
+
+const IconSpark = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5L12 2z" />
+  </svg>
+)
+
+const IconTarget = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />
+  </svg>
+)
+
+const IconMapPin = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
+  </svg>
+)
+
+const IconUsers = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+)
+
+// ── Data ───────────────────────────────────────────────────────────────────
+const STATUS_OPTIONS = [
+  { value: 'actively_looking', label: 'Actively Looking', desc: 'Ready to start immediately' },
+  { value: 'open_to_offers', label: 'Open to Offers', desc: 'Exploring opportunities' },
+  { value: 'employed', label: 'Currently Employed', desc: 'Not actively searching' },
+  { value: 'student', label: 'Student', desc: 'Learning & building skills' },
+  { value: 'freelancer', label: 'Freelancer', desc: 'Working independently' },
+]
+
+const EXP_OPTIONS = [
+  { value: 'fresher', label: 'Fresher', desc: '0 – 1 year' },
+  { value: 'junior', label: 'Junior', desc: '1 – 3 years' },
+  { value: 'mid', label: 'Mid-Level', desc: '3 – 6 years' },
+  { value: 'senior', label: 'Senior', desc: '6 – 10 years' },
+  { value: 'lead', label: 'Lead / Principal', desc: '10+ years' },
+]
+
+const EDU_OPTIONS = ['High School', '12th / Diploma', "Bachelor's Degree", "Master's Degree", 'PhD / Doctorate', 'Self-taught / Bootcamp']
+
+const WORK_MODES = ['Remote', 'On-site', 'Hybrid', 'Flexible']
+
+const INDUSTRIES = [
+  'Technology', 'Finance & Banking', 'Healthcare', 'Education', 'E-commerce',
+  'Manufacturing', 'Government / PSU', 'Media & Entertainment', 'Consulting',
+  'Real Estate', 'Hospitality', 'Logistics', 'Agriculture', 'Energy', 'Other',
+]
+
+const COMPANY_SIZES = ['1–10', '11–50', '51–200', '201–500', '501–2000', '2000+']
+
+const HIRING_VOLUMES = [
+  '1–5 hires', '6–20 hires', '21–50 hires', '50+ hires', 'Ongoing / Always hiring',
+]
+
+// ── Tag Input Component ────────────────────────────────────────────────────
+function TagInput({ tags, setTags, placeholder }: { tags: string[], setTags: (t: string[]) => void, placeholder: string }) {
+  const [input, setInput] = useState('')
+
+  const addTag = (val: string) => {
+    const trimmed = val.trim()
+    if (trimmed && !tags.includes(trimmed)) {
+      setTags([...tags, trimmed])
+    }
+    setInput('')
+  }
+
+  const removeTag = (tag: string) => setTags(tags.filter(t => t !== tag))
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(input) }
+            if (e.key === 'Backspace' && !input && tags.length) removeTag(tags[tags.length - 1])
+          }}
+          placeholder={placeholder}
+          className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-violet-400/60 focus:bg-white/8 transition-all text-sm"
+        />
+        <button
+          onClick={() => addTag(input)}
+          className="px-4 py-3 bg-violet-600/30 hover:bg-violet-600/50 border border-violet-400/30 rounded-xl text-violet-300 text-sm font-medium transition-all"
+        >
+          Add
+        </button>
+      </div>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {tags.map(tag => (
+            <motion.span
+              key={tag}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600/20 border border-violet-400/30 rounded-full text-violet-200 text-sm"
+            >
+              {tag}
+              <button onClick={() => removeTag(tag)} className="text-violet-400 hover:text-white transition-colors">
+                <IconX />
+              </button>
+            </motion.span>
+          ))}
+        </div>
+      )}
+      <p className="text-white/30 text-xs">Press Enter or comma to add · Backspace to remove last</p>
+    </div>
+  )
 }
 
-interface RecruiterData {
-  company: string;
-  industry: string;
-  companySize: string;
-  hiringFor: string[];
-  hiringVolume: string;
-  location: string;
+// ── Select Card ────────────────────────────────────────────────────────────
+function SelectCard({ value, selected, onSelect, label, desc }: any) {
+  return (
+    <button
+      onClick={() => onSelect(value)}
+      className={`w-full text-left px-4 py-3.5 rounded-xl border transition-all duration-200 ${
+        selected
+          ? 'bg-violet-600/25 border-violet-400/60 shadow-lg shadow-violet-900/20'
+          : 'bg-white/4 border-white/8 hover:bg-white/8 hover:border-white/20'
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <p className={`font-medium text-sm ${selected ? 'text-violet-200' : 'text-white/80'}`}>{label}</p>
+          {desc && <p className="text-white/40 text-xs mt-0.5">{desc}</p>}
+        </div>
+        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+          selected ? 'bg-violet-500 border-violet-400' : 'border-white/20'
+        }`}>
+          {selected && <IconCheck />}
+        </div>
+      </div>
+    </button>
+  )
 }
 
-const SKILLS_OPTIONS = [
-  'JavaScript', 'TypeScript', 'React', 'Next.js', 'Node.js', 'Python', 'Java',
-  'SQL', 'AWS', 'Docker', 'Figma', 'UI/UX Design', 'Data Science', 'Machine Learning',
-  'Product Management', 'Digital Marketing', 'Content Writing', 'Sales', 'Finance',
-  'Accounting', 'HR', 'Operations', 'Business Development', 'Android', 'iOS', 'Flutter',
-];
+// ── Multi Toggle ───────────────────────────────────────────────────────────
+function MultiToggle({ options, selected, onToggle }: { options: string[], selected: string[], onToggle: (v: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map(opt => (
+        <button
+          key={opt}
+          onClick={() => onToggle(opt)}
+          className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 ${
+            selected.includes(opt)
+              ? 'bg-violet-600/30 border-violet-400/50 text-violet-200'
+              : 'bg-white/5 border-white/10 text-white/50 hover:text-white/80 hover:border-white/25'
+          }`}
+        >
+          {opt}
+        </button>
+      ))}
+    </div>
+  )
+}
 
-const ROLE_OPTIONS = [
-  'Software Engineer', 'Frontend Developer', 'Backend Developer', 'Full Stack Developer',
-  'Data Analyst', 'Data Scientist', 'Product Manager', 'UI/UX Designer',
-  'DevOps Engineer', 'Business Analyst', 'Marketing Manager', 'Sales Executive',
-  'HR Manager', 'Financial Analyst', 'Content Writer', 'Graphic Designer',
-];
+// ── Main Component ─────────────────────────────────────────────────────────
+export default function OnboardingPage() {
+  const router = useRouter()
+  const [role, setRole] = useState<'seeker' | 'employer' | null>(null)
+  const [step, setStep] = useState(0)   // 0 = role select
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [userId, setUserId] = useState<string | null>(null)
 
-const INDUSTRY_OPTIONS = [
-  'Technology / IT', 'Fintech / Banking', 'E-commerce', 'EdTech', 'Healthcare',
-  'Manufacturing', 'Consulting', 'Media & Entertainment', 'Government / PSU',
-  'Startup', 'FMCG / Retail', 'Real Estate', 'Logistics', 'Other',
-];
+  // Seeker state
+  const [headline, setHeadline] = useState('')
+  const [currentStatus, setCurrentStatus] = useState('')
+  const [expLevel, setExpLevel] = useState('')
+  const [education, setEducation] = useState('')
+  const [location, setLocation] = useState('')
+  const [skills, setSkills] = useState<string[]>([])
+  const [preferredRoles, setPreferredRoles] = useState<string[]>([])
+  const [workModes, setWorkModes] = useState<string[]>([])
 
-// ─── Pill Tag component ───────────────────────────────────────────────────────
-function PillSelect({
-  options, selected, onChange, max,
-}: { options: string[]; selected: string[]; onChange: (v: string[]) => void; max?: number }) {
-  function toggle(o: string) {
-    if (selected.includes(o)) {
-      onChange(selected.filter(x => x !== o));
-    } else {
-      if (max && selected.length >= max) return;
-      onChange([...selected, o]);
+  // Employer state
+  const [companyName, setCompanyName] = useState('')
+  const [industry, setIndustry] = useState('')
+  const [companySize, setCompanySize] = useState('')
+  const [companyLocation, setCompanyLocation] = useState('')
+  const [hiringRoles, setHiringRoles] = useState<string[]>([])
+  const [hiringVolume, setHiringVolume] = useState('')
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) setUserId(data.user.id)
+      else router.push('/auth/login')
+    })
+  }, [])
+
+  const toggleWorkMode = (v: string) =>
+    setWorkModes(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])
+
+  const totalSteps = role === 'seeker' ? 4 : 2
+  const progress = role ? ((step - 1) / totalSteps) * 100 : 0
+
+  const saveAndFinish = async () => {
+    if (!userId) return
+    setSaving(true)
+    setError('')
+    try {
+      const payload = role === 'seeker'
+        ? { id: userId, role: 'seeker', headline, current_status: currentStatus, experience_level: expLevel, education, location, skills, preferred_roles: preferredRoles, work_mode: workModes, onboarding_complete: true, updated_at: new Date().toISOString() }
+        : { id: userId, role: 'employer', company_name: companyName, industry, company_size: companySize, company_location: companyLocation, hiring_roles: hiringRoles, hiring_volume: hiringVolume, onboarding_complete: true, updated_at: new Date().toISOString() }
+
+      const { error: err } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' })
+      if (err) throw err
+      router.push(role === 'seeker' ? '/seeker/dashboard' : '/employer/dashboard')
+    } catch (e: any) {
+      setError(e.message || 'Something went wrong. Please try again.')
+      setSaving(false)
     }
   }
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-      {options.map(o => {
-        const active = selected.includes(o);
-        const disabled = !active && max !== undefined && selected.length >= max;
-        return (
-          <button key={o} onClick={() => toggle(o)} disabled={disabled} style={{
-            padding: '7px 14px', borderRadius: 20, fontSize: 13, cursor: disabled ? 'not-allowed' : 'pointer',
-            background: active ? 'rgba(108,99,255,0.15)' : 'rgba(255,255,255,0.04)',
-            border: `1px solid ${active ? '#6c63ff' : 'rgba(255,255,255,0.1)'}`,
-            color: active ? '#a5b4fc' : 'rgba(241,245,249,0.5)',
-            fontWeight: active ? 600 : 400,
-            opacity: disabled ? 0.4 : 1,
-            transition: 'all 0.15s',
-          }}>{o}</button>
-        );
-      })}
-    </div>
-  );
-}
 
-// ─── Input field ─────────────────────────────────────────────────────────────
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <label style={{ fontSize: 13, fontWeight: 600, color: 'rgba(241,245,249,0.7)', letterSpacing: '0.01em' }}>
-        {label}
-        {hint && <span style={{ fontWeight: 400, color: 'rgba(241,245,249,0.35)', marginLeft: 6 }}>{hint}</span>}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', background: 'rgba(255,255,255,0.04)',
-  border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
-  padding: '11px 14px', color: '#f1f5f9',
-  fontFamily: 'system-ui, sans-serif', fontSize: 14, outline: 'none',
-};
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  appearance: 'none',
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: 36,
-  cursor: 'pointer',
-};
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-export default function OnboardingPage() {
-  const router = useRouter();
-  const [role, setRole] = useState<Role>(null);
-  const [step, setStep] = useState(0); // 0=role select, 1..N = questions
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [userName, setUserName] = useState('');
-  const [vw, setVw] = useState(1280);
-
-  useEffect(() => {
-    const update = () => setVw(window.innerWidth);
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, []);
-
-  const isMobile = vw < 640;
-
-  const supabase = createClient();
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) { router.replace('/auth/login'); return; }
-      setUserName(user.user_metadata?.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'there');
-    });
-  }, []);
-
-  // ── Seeker data ──
-  const [seeker, setSeeker] = useState<SeekerData>({
-    headline: '', currentStatus: '', experience: '',
-    skills: [], education: '', preferredRoles: [],
-    workMode: [], location: '', expectedSalary: '', openToOpportunities: '',
-  });
-
-  // ── Recruiter data ──
-  const [recruiter, setRecruiter] = useState<RecruiterData>({
-    company: '', industry: '', companySize: '',
-    hiringFor: [], hiringVolume: '', location: '',
-  });
-
-  // ── Seeker steps ──
-  const seekerSteps = [
-    {
-      title: 'Your professional headline',
-      subtitle: 'This appears on your profile and helps recruiters find you.',
-      content: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <Field label="Current or desired job title">
-            <input style={inputStyle} placeholder="e.g. Full Stack Developer, Data Analyst, MBA Graduate" value={seeker.headline} onChange={e => setSeeker(s => ({ ...s, headline: e.target.value }))} />
-          </Field>
-          <Field label="What's your current status?">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[
-                { val: 'actively_looking', label: '🔍 Actively looking for a job', sub: 'Open to all opportunities right now' },
-                { val: 'open', label: '👀 Open to opportunities', sub: 'Not urgent, but would consider the right role' },
-                { val: 'employed', label: '💼 Currently employed', sub: 'Happy where I am, not looking' },
-                { val: 'student', label: '🎓 Student / Fresher', sub: 'About to graduate or just entered the market' },
-              ].map(opt => (
-                <div key={opt.val} onClick={() => setSeeker(s => ({ ...s, currentStatus: opt.val }))} style={{
-                  padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
-                  border: `1px solid ${seeker.currentStatus === opt.val ? '#6c63ff' : 'rgba(255,255,255,0.08)'}`,
-                  background: seeker.currentStatus === opt.val ? 'rgba(108,99,255,0.1)' : 'rgba(255,255,255,0.02)',
-                  transition: 'all 0.15s',
-                }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>{opt.label}</div>
-                  <div style={{ fontSize: 12, color: 'rgba(241,245,249,0.4)', marginTop: 2 }}>{opt.sub}</div>
-                </div>
-              ))}
-            </div>
-          </Field>
-        </div>
-      ),
-      valid: () => seeker.headline.trim().length > 2 && seeker.currentStatus !== '',
-    },
-    {
-      title: 'Experience & Education',
-      subtitle: 'Help us match you with the right opportunities.',
-      content: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <Field label="Years of experience">
-            <select style={selectStyle} value={seeker.experience} onChange={e => setSeeker(s => ({ ...s, experience: e.target.value }))}>
-              <option value="">Select experience level</option>
-              <option value="fresher">Fresher (0–1 year)</option>
-              <option value="1-2">1–2 years</option>
-              <option value="2-5">2–5 years</option>
-              <option value="5-10">5–10 years</option>
-              <option value="10+">10+ years</option>
-            </select>
-          </Field>
-          <Field label="Highest education">
-            <select style={selectStyle} value={seeker.education} onChange={e => setSeeker(s => ({ ...s, education: e.target.value }))}>
-              <option value="">Select education level</option>
-              <option value="10th">10th / SSC</option>
-              <option value="12th">12th / HSC / Diploma</option>
-              <option value="bachelors">Bachelor's Degree (B.Tech / B.Sc / BCA / BA / BBA)</option>
-              <option value="masters">Master's Degree (M.Tech / MBA / MCA / M.Sc)</option>
-              <option value="phd">PhD / Doctorate</option>
-            </select>
-          </Field>
-          <Field label="Current location">
-            <input style={inputStyle} placeholder="e.g. Bangalore, Mumbai, Delhi NCR, Pune" value={seeker.location} onChange={e => setSeeker(s => ({ ...s, location: e.target.value }))} />
-          </Field>
-        </div>
-      ),
-      valid: () => seeker.experience !== '' && seeker.education !== '' && seeker.location.trim().length > 1,
-    },
-    {
-      title: 'Your skills',
-      subtitle: 'Select up to 10 skills that best represent your expertise.',
-      content: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ fontSize: 12, color: 'rgba(241,245,249,0.35)' }}>
-            {seeker.skills.length}/10 selected
-          </div>
-          <PillSelect options={SKILLS_OPTIONS} selected={seeker.skills} onChange={v => setSeeker(s => ({ ...s, skills: v }))} max={10} />
-        </div>
-      ),
-      valid: () => seeker.skills.length >= 1,
-    },
-    {
-      title: 'Job preferences',
-      subtitle: 'Tell us what kind of roles and work setup you\'re looking for.',
-      content: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <Field label="Preferred roles" hint="(pick up to 5)">
-            <PillSelect options={ROLE_OPTIONS} selected={seeker.preferredRoles} onChange={v => setSeeker(s => ({ ...s, preferredRoles: v }))} max={5} />
-          </Field>
-          <Field label="Work mode preference">
-            <PillSelect options={['Remote', 'Hybrid', 'In-office', 'Flexible']} selected={seeker.workMode} onChange={v => setSeeker(s => ({ ...s, workMode: v }))} />
-          </Field>
-          <Field label="Expected salary (LPA)">
-            <select style={selectStyle} value={seeker.expectedSalary} onChange={e => setSeeker(s => ({ ...s, expectedSalary: e.target.value }))}>
-              <option value="">Select range</option>
-              <option value="0-3">₹0 – ₹3 LPA (Fresher / Internship)</option>
-              <option value="3-6">₹3 – ₹6 LPA</option>
-              <option value="6-10">₹6 – ₹10 LPA</option>
-              <option value="10-15">₹10 – ₹15 LPA</option>
-              <option value="15-25">₹15 – ₹25 LPA</option>
-              <option value="25-50">₹25 – ₹50 LPA</option>
-              <option value="50+">₹50+ LPA</option>
-            </select>
-          </Field>
-        </div>
-      ),
-      valid: () => seeker.preferredRoles.length >= 1 && seeker.workMode.length >= 1 && seeker.expectedSalary !== '',
-    },
-  ];
-
-  // ── Recruiter steps ──
-  const recruiterSteps = [
-    {
-      title: 'About your company',
-      subtitle: 'Tell candidates where they\'ll be working.',
-      content: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <Field label="Company name">
-            <input style={inputStyle} placeholder="e.g. Razorpay, Infosys, Your Startup Name" value={recruiter.company} onChange={e => setRecruiter(r => ({ ...r, company: e.target.value }))} />
-          </Field>
-          <Field label="Industry">
-            <select style={selectStyle} value={recruiter.industry} onChange={e => setRecruiter(r => ({ ...r, industry: e.target.value }))}>
-              <option value="">Select industry</option>
-              {INDUSTRY_OPTIONS.map(i => <option key={i} value={i}>{i}</option>)}
-            </select>
-          </Field>
-          <Field label="Company size">
-            <select style={selectStyle} value={recruiter.companySize} onChange={e => setRecruiter(r => ({ ...r, companySize: e.target.value }))}>
-              <option value="">Select size</option>
-              <option value="1-10">1–10 employees (Early startup)</option>
-              <option value="11-50">11–50 employees (Startup)</option>
-              <option value="51-200">51–200 employees (Growth stage)</option>
-              <option value="201-1000">201–1,000 employees (Mid-size)</option>
-              <option value="1000+">1,000+ employees (Enterprise / MNC)</option>
-            </select>
-          </Field>
-          <Field label="Company location / HQ">
-            <input style={inputStyle} placeholder="e.g. Bangalore, Mumbai, Pan India" value={recruiter.location} onChange={e => setRecruiter(r => ({ ...r, location: e.target.value }))} />
-          </Field>
-        </div>
-      ),
-      valid: () => recruiter.company.trim().length > 1 && recruiter.industry !== '' && recruiter.companySize !== '',
-    },
-    {
-      title: 'Your hiring needs',
-      subtitle: 'Help us surface the right candidates for you.',
-      content: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <Field label="What roles are you hiring for?" hint="(pick up to 6)">
-            <PillSelect options={ROLE_OPTIONS} selected={recruiter.hiringFor} onChange={v => setRecruiter(r => ({ ...r, hiringFor: v }))} max={6} />
-          </Field>
-          <Field label="Hiring volume in next 3 months">
-            <select style={selectStyle} value={recruiter.hiringVolume} onChange={e => setRecruiter(r => ({ ...r, hiringVolume: e.target.value }))}>
-              <option value="">Select volume</option>
-              <option value="1-5">1–5 hires</option>
-              <option value="6-20">6–20 hires</option>
-              <option value="21-50">21–50 hires</option>
-              <option value="50+">50+ hires</option>
-            </select>
-          </Field>
-        </div>
-      ),
-      valid: () => recruiter.hiringFor.length >= 1 && recruiter.hiringVolume !== '',
-    },
-  ];
-
-  const steps = role === 'seeker' ? seekerSteps : recruiterSteps;
-  const totalSteps = steps.length;
-  const currentStep = steps[step - 1];
-  const isLastStep = step === totalSteps;
-
-  // ── Submit ──
-  const handleSubmit = async () => {
-    setLoading(true);
-    setError('');
+  const skipAndFinish = async () => {
+    if (!userId || !role) return
+    setSaving(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/auth/login'); return; }
-
-      const profileData = role === 'seeker'
-        ? {
-            id: user.id,
-            role: 'seeker',
-            email: user.email,
-            full_name: user.user_metadata?.full_name || '',
-            headline: seeker.headline,
-            current_status: seeker.currentStatus,
-            experience: seeker.experience,
-            education: seeker.education,
-            location: seeker.location,
-            skills: seeker.skills,
-            preferred_roles: seeker.preferredRoles,
-            work_mode: seeker.workMode,
-            expected_salary: seeker.expectedSalary,
-            updated_at: new Date().toISOString(),
-          }
-        : {
-            id: user.id,
-            role: 'recruiter',
-            email: user.email,
-            full_name: user.user_metadata?.full_name || '',
-            company: recruiter.company,
-            industry: recruiter.industry,
-            company_size: recruiter.companySize,
-            hiring_for: recruiter.hiringFor,
-            hiring_volume: recruiter.hiringVolume,
-            location: recruiter.location,
-            updated_at: new Date().toISOString(),
-          };
-
-      const { error: upsertError } = await supabase.from('profiles').upsert(profileData);
-      if (upsertError) {
-        setError(upsertError.message);
-        setLoading(false);
-        return;
-      }
-      router.replace(role === 'seeker' ? '/seeker/dashboard' : '/employer/dashboard');
-    } catch (e) {
-      setError('Something went wrong. Please try again.');
-      setLoading(false);
+      await supabase.from('profiles').upsert(
+        { id: userId, role, onboarding_complete: true, updated_at: new Date().toISOString() },
+        { onConflict: 'id' }
+      )
+      router.push(role === 'seeker' ? '/seeker/dashboard' : '/employer/dashboard')
+    } catch {
+      router.push(role === 'seeker' ? '/seeker/dashboard' : '/employer/dashboard')
     }
-  };
+  }
 
-  const handleNext = () => {
-    if (isLastStep) { handleSubmit(); return; }
-    setStep(s => s + 1);
-  };
+  // ── Role Select ────────────────────────────────────────────────────────
+  const RoleSelect = () => (
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -24 }}
+      className="space-y-6"
+    >
+      <div className="text-center space-y-2 pb-2">
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+          className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shadow-xl shadow-violet-900/40 mb-5"
+        >
+          <IconSpark />
+        </motion.div>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white">Welcome to LYU</h1>
+        <p className="text-white/50 text-sm sm:text-base">Tell us what brings you here so we can personalise your experience</p>
+      </div>
 
-  // ── Progress ──
-  const progress = step === 0 ? 0 : Math.round((step / totalSteps) * 100);
+      <div className="grid gap-4">
+        {[
+          {
+            id: 'seeker',
+            title: 'I\'m a Job Seeker',
+            desc: 'Looking for jobs, internships, or career opportunities',
+            icon: <IconBriefcase />,
+            gradient: 'from-violet-600/20 to-purple-700/20',
+            border: 'border-violet-500/30',
+            accent: 'text-violet-300',
+          },
+          {
+            id: 'employer',
+            title: 'I\'m an Employer',
+            desc: 'Hiring talent for my company or organisation',
+            icon: <IconBuilding />,
+            gradient: 'from-emerald-600/20 to-teal-700/20',
+            border: 'border-emerald-500/30',
+            accent: 'text-emerald-300',
+          },
+        ].map(opt => (
+          <motion.button
+            key={opt.id}
+            whileHover={{ scale: 1.02, y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => { setRole(opt.id as any); setStep(1) }}
+            className={`w-full text-left p-5 sm:p-6 rounded-2xl bg-gradient-to-br ${opt.gradient} border ${opt.border} hover:brightness-110 transition-all duration-200 shadow-lg`}
+          >
+            <div className="flex items-start gap-4">
+              <div className={`${opt.accent} mt-0.5`}>{opt.icon}</div>
+              <div>
+                <h3 className="text-white font-semibold text-base sm:text-lg">{opt.title}</h3>
+                <p className="text-white/50 text-sm mt-1">{opt.desc}</p>
+              </div>
+              <div className="ml-auto text-white/20 mt-1">
+                <IconArrow />
+              </div>
+            </div>
+          </motion.button>
+        ))}
+      </div>
+    </motion.div>
+  )
+
+  // ── Seeker Steps ───────────────────────────────────────────────────────
+  const SeekerStep1 = () => (
+    <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }} className="space-y-5">
+      <StepHeader icon={<IconSpark />} title="Your Professional Identity" subtitle="Help employers understand who you are at a glance" />
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider">Professional Headline</label>
+        <input
+          value={headline}
+          onChange={e => setHeadline(e.target.value)}
+          placeholder="e.g. Full Stack Developer · 3 years experience"
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/25 focus:outline-none focus:border-violet-400/60 focus:bg-white/8 transition-all text-sm"
+        />
+        <p className="text-white/30 text-xs">This appears at the top of your profile</p>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider">Current Status</label>
+        <div className="space-y-2">
+          {STATUS_OPTIONS.map(opt => (
+            <SelectCard key={opt.value} value={opt.value} selected={currentStatus === opt.value} onSelect={setCurrentStatus} label={opt.label} desc={opt.desc} />
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  )
+
+  const SeekerStep2 = () => (
+    <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }} className="space-y-5">
+      <StepHeader icon={<IconTarget />} title="Experience & Background" subtitle="Share your level of expertise and educational background" />
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider">Experience Level</label>
+        <div className="space-y-2">
+          {EXP_OPTIONS.map(opt => (
+            <SelectCard key={opt.value} value={opt.value} selected={expLevel === opt.value} onSelect={setExpLevel} label={opt.label} desc={opt.desc} />
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider">Highest Education</label>
+        <div className="flex flex-wrap gap-2">
+          {EDU_OPTIONS.map(opt => (
+            <button
+              key={opt}
+              onClick={() => setEducation(opt)}
+              className={`px-3 py-2 rounded-xl border text-sm transition-all ${
+                education === opt
+                  ? 'bg-violet-600/25 border-violet-400/50 text-violet-200'
+                  : 'bg-white/5 border-white/10 text-white/50 hover:border-white/25 hover:text-white/80'
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider flex items-center gap-2">
+          <IconMapPin /> Location
+        </label>
+        <input
+          value={location}
+          onChange={e => setLocation(e.target.value)}
+          placeholder="e.g. Bangalore, Mumbai, Delhi NCR"
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/25 focus:outline-none focus:border-violet-400/60 transition-all text-sm"
+        />
+      </div>
+    </motion.div>
+  )
+
+  const SeekerStep3 = () => (
+    <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }} className="space-y-5">
+      <StepHeader icon={<IconSpark />} title="Your Skills" subtitle="Type any skill — technical, creative, or soft skills" />
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider">Add Your Skills</label>
+        <TagInput
+          tags={skills}
+          setTags={setSkills}
+          placeholder="e.g. React, Excel, Public Speaking, Photoshop..."
+        />
+      </div>
+
+      {skills.length === 0 && (
+        <div className="p-4 rounded-xl bg-white/3 border border-white/8">
+          <p className="text-white/40 text-sm">💡 You can add any skill — coding languages, tools, soft skills, languages, or domain knowledge. You can always update this later.</p>
+        </div>
+      )}
+    </motion.div>
+  )
+
+  const SeekerStep4 = () => (
+    <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }} className="space-y-5">
+      <StepHeader icon={<IconTarget />} title="Job Preferences" subtitle="What kind of work are you looking for?" />
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider">Preferred Job Roles / Titles</label>
+        <TagInput
+          tags={preferredRoles}
+          setTags={setPreferredRoles}
+          placeholder="e.g. Software Engineer, Data Analyst, UI Designer..."
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider">Work Mode Preference</label>
+        <MultiToggle options={WORK_MODES} selected={workModes} onToggle={toggleWorkMode} />
+      </div>
+    </motion.div>
+  )
+
+  // ── Employer Steps ─────────────────────────────────────────────────────
+  const EmployerStep1 = () => (
+    <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }} className="space-y-5">
+      <StepHeader icon={<IconBuilding />} title="About Your Company" subtitle="Help candidates learn about where they'll be working" />
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider">Company Name</label>
+        <input
+          value={companyName}
+          onChange={e => setCompanyName(e.target.value)}
+          placeholder="Your company or organisation name"
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/25 focus:outline-none focus:border-violet-400/60 transition-all text-sm"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider">Industry</label>
+        <div className="flex flex-wrap gap-2">
+          {INDUSTRIES.map(opt => (
+            <button
+              key={opt}
+              onClick={() => setIndustry(opt)}
+              className={`px-3 py-2 rounded-xl border text-sm transition-all ${
+                industry === opt
+                  ? 'bg-emerald-600/25 border-emerald-400/50 text-emerald-200'
+                  : 'bg-white/5 border-white/10 text-white/50 hover:border-white/25 hover:text-white/80'
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider">Company Size</label>
+        <div className="grid grid-cols-3 gap-2">
+          {COMPANY_SIZES.map(opt => (
+            <button
+              key={opt}
+              onClick={() => setCompanySize(opt)}
+              className={`py-2.5 rounded-xl border text-sm transition-all ${
+                companySize === opt
+                  ? 'bg-emerald-600/25 border-emerald-400/50 text-emerald-200'
+                  : 'bg-white/5 border-white/10 text-white/50 hover:border-white/25 hover:text-white/80'
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider flex items-center gap-2">
+          <IconMapPin /> Company Location
+        </label>
+        <input
+          value={companyLocation}
+          onChange={e => setCompanyLocation(e.target.value)}
+          placeholder="e.g. Bangalore, Mumbai, Pan India"
+          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white placeholder-white/25 focus:outline-none focus:border-violet-400/60 transition-all text-sm"
+        />
+      </div>
+    </motion.div>
+  )
+
+  const EmployerStep2 = () => (
+    <motion.div initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }} className="space-y-5">
+      <StepHeader icon={<IconUsers />} title="Hiring Details" subtitle="What kind of talent are you looking for?" />
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider">Roles You're Hiring For</label>
+        <TagInput
+          tags={hiringRoles}
+          setTags={setHiringRoles}
+          placeholder="e.g. Backend Developer, Sales Manager, Graphic Designer..."
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-white/60 text-xs font-medium uppercase tracking-wider">Expected Hiring Volume</label>
+        <div className="space-y-2">
+          {HIRING_VOLUMES.map(opt => (
+            <SelectCard key={opt} value={opt} selected={hiringVolume === opt} onSelect={setHiringVolume} label={opt} />
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  )
+
+  // ── Step Header ────────────────────────────────────────────────────────
+  const StepHeader = ({ icon, title, subtitle }: any) => (
+    <div className="flex items-start gap-3 pb-1">
+      <div className="w-10 h-10 rounded-xl bg-violet-600/20 border border-violet-400/20 flex items-center justify-center text-violet-300 flex-shrink-0">
+        {icon}
+      </div>
+      <div>
+        <h2 className="text-lg sm:text-xl font-semibold text-white">{title}</h2>
+        <p className="text-white/40 text-sm mt-0.5">{subtitle}</p>
+      </div>
+    </div>
+  )
+
+  // ── Step Renderer ──────────────────────────────────────────────────────
+  const renderStep = () => {
+    if (step === 0) return <RoleSelect />
+    if (role === 'seeker') {
+      if (step === 1) return <SeekerStep1 />
+      if (step === 2) return <SeekerStep2 />
+      if (step === 3) return <SeekerStep3 />
+      if (step === 4) return <SeekerStep4 />
+    }
+    if (role === 'employer') {
+      if (step === 1) return <EmployerStep1 />
+      if (step === 2) return <EmployerStep2 />
+    }
+  }
+
+  const isLastStep = role === 'seeker' ? step === 4 : step === 2
 
   return (
-    <>
-      <style>{`
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        select option { background: #111118; color: #f1f5f9; }
-        input:focus, select:focus { border-color: #6c63ff !important; box-shadow: 0 0 0 3px rgba(108,99,255,0.14); }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
-      `}</style>
+    <div className="min-h-screen bg-[#0a0a0f] flex flex-col items-center justify-start px-4 py-8 sm:py-12">
+      {/* Background glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-violet-600/8 rounded-full blur-[120px]" />
+        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-purple-800/6 rounded-full blur-[100px]" />
+      </div>
 
-      <div style={{ minHeight: '100vh', background: '#0a0a0f', display: 'flex', flexDirection: 'column', fontFamily: 'system-ui, sans-serif' }}>
+      <div className="relative w-full max-w-lg">
+        {/* Logo */}
+        <div className="flex items-center justify-between mb-6 sm:mb-8">
+          <span className="text-white/90 font-bold text-xl tracking-tight">LYU</span>
+          {step > 0 && (
+            <button onClick={skipAndFinish} className="text-white/30 hover:text-white/60 text-sm transition-colors">
+              Skip for now →
+            </button>
+          )}
+        </div>
 
-        {/* Top bar with progress */}
-        <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'rgba(10,10,15,0.9)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '14px 24px' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 28, height: 28, background: '#6c63ff', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, color: '#fff' }}>L</div>
-              <span style={{ fontWeight: 700, fontSize: 16, color: '#f1f5f9', letterSpacing: '-0.02em' }}>LYU</span>
+        {/* Progress bar */}
+        {step > 0 && role && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white/40 text-xs">Step {step} of {totalSteps}</span>
+              <span className="text-white/40 text-xs">{Math.round(progress)}% complete</span>
             </div>
-            {step > 0 && (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 99, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${progress}%`, background: '#6c63ff', borderRadius: 99, transition: 'width 0.4s ease' }} />
-                </div>
-                <span style={{ fontSize: 12, color: 'rgba(241,245,249,0.4)', whiteSpace: 'nowrap', fontWeight: 500 }}>
-                  {step}/{totalSteps}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: step === 0 ? 'center' : 'flex-start', padding: isMobile ? '32px 16px 100px' : '48px 24px 100px' }}>
-          <div style={{ width: '100%', maxWidth: 560, animation: 'fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) both' }}>
-
-            {/* ── STEP 0: Role selection ── */}
-            {step === 0 && (
-              <div>
-                <div style={{ marginBottom: 40, textAlign: 'center' }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', color: '#6c63ff', textTransform: 'uppercase', marginBottom: 12 }}>Welcome to LYU{userName ? `, ${userName}` : ''}! 👋</p>
-                  <h1 style={{ fontWeight: 800, fontSize: isMobile ? 28 : 36, color: '#f1f5f9', letterSpacing: '-0.03em', marginBottom: 10, lineHeight: 1.15 }}>
-                    What brings you here?
-                  </h1>
-                  <p style={{ fontSize: 15, color: 'rgba(241,245,249,0.45)', lineHeight: 1.6 }}>
-                    Choose your role and we'll personalize your entire experience.
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  {/* Job Seeker card */}
-                  {[
-                    {
-                      id: 'seeker' as Role,
-                      emoji: '🎯',
-                      label: 'Job Seeker',
-                      sub: 'I\'m looking for a job or internship',
-                      bullets: ['AI Career Mentor', 'Personalized Learning Path', 'Resume Studio', 'Job Opportunities Feed', 'Application Tracker'],
-                      color: '#6c63ff',
-                    },
-                    {
-                      id: 'recruiter' as Role,
-                      emoji: '🏢',
-                      label: 'Recruiter / Employer',
-                      sub: 'I\'m hiring for my company or team',
-                      bullets: ['Smart Candidate Matching', 'Post Jobs in Minutes', 'AI-Screened Applicants', 'Talent Pool Access', 'Analytics Dashboard'],
-                      color: '#06b6d4',
-                    },
-                  ].map(card => (
-                    <div key={card.id} onClick={() => setRole(card.id)} style={{
-                      padding: '22px 24px', borderRadius: 16, cursor: 'pointer',
-                      border: `2px solid ${role === card.id ? card.color : 'rgba(255,255,255,0.08)'}`,
-                      background: role === card.id ? `${card.color}0f` : 'rgba(255,255,255,0.02)',
-                      transition: 'all 0.2s',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
-                        <div style={{ fontSize: 28 }}>{card.emoji}</div>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 17, color: '#f1f5f9' }}>{card.label}</div>
-                          <div style={{ fontSize: 13, color: 'rgba(241,245,249,0.45)', marginTop: 2 }}>{card.sub}</div>
-                        </div>
-                        <div style={{ marginLeft: 'auto', width: 20, height: 20, borderRadius: '50%', border: `2px solid ${role === card.id ? card.color : 'rgba(255,255,255,0.2)'}`, background: role === card.id ? card.color : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}>
-                          {role === card.id && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {card.bullets.map(b => (
-                          <span key={b} style={{ fontSize: 11.5, padding: '3px 10px', borderRadius: 20, background: role === card.id ? `${card.color}18` : 'rgba(255,255,255,0.04)', border: `1px solid ${role === card.id ? card.color + '30' : 'rgba(255,255,255,0.08)'}`, color: role === card.id ? card.color : 'rgba(241,245,249,0.35)', fontWeight: 500 }}>{b}</span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <button onClick={() => { if (role) setStep(1); }} disabled={!role} style={{
-                  width: '100%', marginTop: 24, padding: '14px', borderRadius: 12, border: 'none',
-                  background: role ? '#6c63ff' : 'rgba(255,255,255,0.06)',
-                  color: role ? '#fff' : 'rgba(241,245,249,0.3)',
-                  fontSize: 15, fontWeight: 600, cursor: role ? 'pointer' : 'not-allowed',
-                  transition: 'all 0.2s',
-                }}>
-                  Continue as {role === 'seeker' ? 'Job Seeker' : role === 'recruiter' ? 'Recruiter' : '...'}
-                  {role && ' →'}
-                </button>
-              </div>
-            )}
-
-            {/* ── STEPS 1+: Questions ── */}
-            {step > 0 && currentStep && (
-              <div key={step} style={{ animation: 'fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) both' }}>
-                <div style={{ marginBottom: 28 }}>
-                  <p style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.1em', color: '#6c63ff', textTransform: 'uppercase', marginBottom: 10 }}>
-                    Step {step} of {totalSteps}
-                  </p>
-                  <h2 style={{ fontWeight: 800, fontSize: isMobile ? 22 : 28, color: '#f1f5f9', letterSpacing: '-0.025em', marginBottom: 8, lineHeight: 1.2 }}>
-                    {currentStep.title}
-                  </h2>
-                  <p style={{ fontSize: 14, color: 'rgba(241,245,249,0.42)', lineHeight: 1.6 }}>{currentStep.subtitle}</p>
-                </div>
-
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: isMobile ? '20px 16px' : '24px', marginBottom: 24 }}>
-                  {currentStep.content}
-                </div>
-
-                {error && (
-                  <div style={{ background: 'rgba(239,68,68,0.09)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '11px 14px', fontSize: 13, color: '#fca5a5', marginBottom: 16 }}>
-                    {error}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Sticky bottom nav (for steps 1+) */}
-        {step > 0 && (
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(10,10,15,0.95)', backdropFilter: 'blur(20px)', borderTop: '1px solid rgba(255,255,255,0.07)', padding: '16px 24px' }}>
-            <div style={{ maxWidth: 560, margin: '0 auto', display: 'flex', gap: 12 }}>
-              <button onClick={() => setStep(s => s - 1)} style={{ padding: '12px 20px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'rgba(241,245,249,0.6)', fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>
-                ← Back
-              </button>
-              <button
-                onClick={handleNext}
-                disabled={!currentStep?.valid() || loading}
-                style={{
-                  flex: 1, padding: '12px', borderRadius: 10, border: 'none',
-                  background: currentStep?.valid() ? '#6c63ff' : 'rgba(255,255,255,0.06)',
-                  color: currentStep?.valid() ? '#fff' : 'rgba(241,245,249,0.3)',
-                  fontSize: 15, fontWeight: 600, cursor: currentStep?.valid() ? 'pointer' : 'not-allowed',
-                  transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                }}
-              >
-                {loading ? (
-                  <><div style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /> Setting up...</>
-                ) : isLastStep ? '🚀 Complete Setup' : 'Continue →'}
-              </button>
+            <div className="h-1 bg-white/8 rounded-full overflow-hidden">
+              <motion.div
+                className="h-full bg-gradient-to-r from-violet-500 to-purple-400 rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+              />
             </div>
           </div>
         )}
+
+        {/* Card */}
+        <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-5 sm:p-7 shadow-2xl backdrop-blur-sm">
+          <AnimatePresence mode="wait">
+            <div key={`${role}-${step}`}>
+              {renderStep()}
+            </div>
+          </AnimatePresence>
+
+          {/* Error */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm"
+            >
+              {error}
+            </motion.div>
+          )}
+
+          {/* Navigation */}
+          {step > 0 && (
+            <div className="flex items-center justify-between mt-6 pt-5 border-t border-white/8">
+              <button
+                onClick={() => step === 1 ? (setStep(0), setRole(null)) : setStep(step - 1)}
+                className="px-4 py-2.5 rounded-xl text-white/40 hover:text-white/70 text-sm transition-colors"
+              >
+                ← Back
+              </button>
+
+              <div className="flex gap-2">
+                {!isLastStep ? (
+                  <button
+                    onClick={() => setStep(step + 1)}
+                    className="px-5 py-2.5 bg-violet-600 hover:bg-violet-500 rounded-xl text-white font-medium text-sm transition-all flex items-center gap-2 shadow-lg shadow-violet-900/30"
+                  >
+                    Continue <IconArrow />
+                  </button>
+                ) : (
+                  <button
+                    onClick={saveAndFinish}
+                    disabled={saving}
+                    className="px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl text-white font-medium text-sm transition-all flex items-center gap-2 shadow-lg shadow-violet-900/30 disabled:opacity-60"
+                  >
+                    {saving ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>Complete Setup ✓</>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Step dots */}
+        {step > 0 && role && (
+          <div className="flex justify-center gap-2 mt-5">
+            {Array.from({ length: totalSteps }).map((_, i) => (
+              <div
+                key={i}
+                className={`rounded-full transition-all duration-300 ${
+                  i + 1 === step ? 'w-6 h-1.5 bg-violet-400' : i + 1 < step ? 'w-1.5 h-1.5 bg-violet-600/60' : 'w-1.5 h-1.5 bg-white/15'
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
-    </>
-  );
+    </div>
+  )
 }
